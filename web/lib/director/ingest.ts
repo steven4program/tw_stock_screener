@@ -17,15 +17,29 @@ const SRC = {
 
 export interface DirectorHolding { stockId: string; pct: number; dataMonth: string; }
 
+/** 抓文字含逾時與重試（body 讀取也在重試範圍內；董監明細 CSV 約 3MB，政府端點易斷線）。 */
+async function getText(url: string, accept: string, attempts = 4): Promise<string> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(url, { headers: { Accept: accept, 'User-Agent': 'stock-screener' }, signal: AbortSignal.timeout(45_000) });
+      if (!res.ok) throw new Error(`請求失敗 ${res.status}：${url}`);
+      return await res.text();
+    } catch (e) {
+      lastErr = e;
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, 600 * (i + 1)));
+    }
+  }
+  throw new Error(`重試 ${attempts} 次仍失敗：${url}\n${(lastErr as Error)?.message ?? lastErr}`);
+}
+
 async function getCsv(url: string): Promise<string> {
-  const res = await fetch(url, { headers: { Accept: 'text/csv', 'User-Agent': 'stock-screener' } });
-  const text = await res.text();
+  const text = await getText(url, 'text/csv');
   if (text.slice(0, 200).toLowerCase().includes('<html')) throw new Error(`董監明細回傳 HTML 而非 CSV：${url}`);
   return text;
 }
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': 'stock-screener' } });
-  return (await res.json()) as T;
+  return JSON.parse(await getText(url, 'application/json')) as T;
 }
 
 export async function ingestMarket(market: 'TWSE' | 'TPEx'): Promise<DirectorHolding[]> {
