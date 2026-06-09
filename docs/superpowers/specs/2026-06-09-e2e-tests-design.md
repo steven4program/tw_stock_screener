@@ -45,7 +45,7 @@ Playwright test
         │
         ├─ if (process.env.E2E === '1'):
         │     scenario = cookies().get('e2e_scenario')?.value ?? 'success'
-        │     return (await import('./snapshot.fixture.server')).getFixtureSnapshot(scenario)
+        │     return (await import('./snapshot.fixture')).getFixtureSnapshot(scenario)
         │
         └─ else: real Supabase path (unchanged)
         ▼
@@ -58,7 +58,7 @@ Playwright test
 ### Components / files
 
 - **Modify** `web/lib/snapshot.server.ts` — add the ~4-line E2E guard at the top of `getLatestSnapshot()` (dynamic import of the fixture module; reads `e2e_scenario` cookie via `next/headers`).
-- **Create** `web/lib/snapshot.fixture.server.ts` (`import 'server-only'`) — exports `getFixtureSnapshot(scenario: string): SnapshotPayload`. Holds the shared `FIXTURE_SIGNALS: StockSignal[]` and a `SCENARIOS` map producing each `SnapshotPayload`. Unknown scenario → `success`.
+- **Create** `web/lib/snapshot.fixture.ts` (**pure** — no `server-only`, so the vitest sanity test can import it; it's pure data needing no server guard) — exports `getFixtureSnapshot(scenario: string): SnapshotPayload`. Holds the shared `FIXTURE_SIGNALS: StockSignal[]` and a `SCENARIOS` map producing each `SnapshotPayload`. Unknown scenario → `success`.
 - **Create** `web/lib/__tests__/snapshot.fixture.test.ts` (vitest) — fixture **sanity** only (NOT a logic re-test): each named E2E anchor stock exists and has its intended fields (N-anchor `instBuyStreak===2`; X-anchor `directorHoldingPct ∈ [15,20)`; the A-only / B-only / A+B anchors have the matching `eligible*`/fields; one row `changeRatio>0`, one `<0`, one `=== null`; one row's `directorDataMonth` < `directorDataMonthLatest`), scenario names are valid, and `no_data.signals.length === 0`. It does **not** pin `runFilter` summary counts — that would just re-test pure logic already covered by `filter.test.ts`. (Cut per the Codex YAGNI pass.)
 - **Create** `web/playwright.config.ts` — `testDir: './e2e'`, `baseURL: 'http://localhost:3100'`, `webServer: { command: 'E2E=1 next start -p 3100', reuseExistingServer: !process.env.CI, url: baseURL }`, single chromium project, `forbidOnly` in CI, trace `'on-first-retry'`.
 - **Create** `web/e2e/smoke.spec.ts`, `web/e2e/interactions.spec.ts`, `web/e2e/rendering.spec.ts`, `web/e2e/status.spec.ts`.
