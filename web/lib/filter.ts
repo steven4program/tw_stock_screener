@@ -34,8 +34,6 @@ export function matchesB(s: StockSignal, p: FilterParams): boolean {
     inBand(s.distMa20Ratio)
   );
 }
-
-// 追加到 web/lib/filter.ts
 function pct1(ratio: number): string {
   return (ratio * 100).toFixed(1);
 }
@@ -77,8 +75,6 @@ export function reasonsForB(s: StockSignal, p: FilterParams): string[] {
     maStateReason(s.ma20, s.ma20Prev, s.ma20Holdflat5d, '月線'),
   ];
 }
-
-// 追加到 web/lib/filter.ts
 export type ManualSortKey = 'streak' | 'dist' | 'buyLots' | 'volume' | 'director';
 export type SortDir = 'asc' | 'desc';
 

@@ -61,8 +61,6 @@ describe('matchesB（條件 B 月線型，用 20MA）', () => {
   });
 });
 
-// 追加到 web/lib/__tests__/filter.test.ts
-
 describe('reasonsForA（季線型入選原因）', () => {
   it('涵蓋連買、董監、距季線、季線狀態四條', () => {
     const r = reasonsForA(sig({ instBuyStreak: 5, directorHoldingPct: 18.2, distMa60Ratio: 0.021 }), { n: 2, x: 15 });
@@ -94,8 +92,6 @@ describe('reasonsForB（月線型）', () => {
     expect(r[3]).toContain('月線');
   });
 });
-
-// 追加到 web/lib/__tests__/filter.test.ts
 
 describe('runFilter 標籤與統計', () => {
   it('依符合度標 A / B / A+B，並只收 matchA||matchB', () => {
