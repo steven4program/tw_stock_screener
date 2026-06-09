@@ -1,5 +1,5 @@
 // web/lib/pipeline.ts — server-only
-import { latestTradeDate, tradingDaysInRange, fetchPrices, fetchInstitutional, fetchStockInfo } from './finmind';
+import { latestTradeDate, tradingDaysInRange, fetchPrices, fetchInstitutional, fetchStockInfo } from './marketdata';
 import { ingestAllDirectors } from './director/ingest';
 import { buildSignals } from './signal-builder';
 import {

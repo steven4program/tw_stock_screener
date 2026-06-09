@@ -1,6 +1,6 @@
 // web/lib/repo.ts — server-only
 import { getSupabase } from './supabase';
-import type { PriceRow, InstRow } from './finmind-normalize';
+import type { PriceRow, InstRow } from './marketdata';
 import type { DirectorHolding } from './director/ingest';
 import type { StockSignal } from './types';
 

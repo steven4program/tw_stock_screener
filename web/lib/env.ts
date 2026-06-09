@@ -8,6 +8,5 @@ function required(name: string): string {
 export const env = {
   supabaseUrl: () => required('SUPABASE_URL'),
   supabaseServiceKey: () => required('SUPABASE_SERVICE_ROLE_KEY'),
-  finmindToken: () => required('FINMIND_TOKEN'),
   cronSecret: () => required('CRON_SECRET'),
 };
