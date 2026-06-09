@@ -29,6 +29,16 @@ function mapRow(r: Record<string, unknown>): StockSignal {
 
 /** Server-only. Reads the latest displayable snapshot + derives the status scenario. */
 export async function getLatestSnapshot(): Promise<SnapshotPayload> {
+  // E2E fixture seam — active ONLY under E2E=1, inert in production. Lets Playwright
+  // render deterministic data per scenario via the `e2e_scenario` cookie (no DB).
+  // Dynamic imports keep next/headers + fixtures off the production code path.
+  if (process.env.E2E === '1') {
+    const { cookies } = await import('next/headers');
+    const scenario = (await cookies()).get('e2e_scenario')?.value ?? 'success';
+    const { getFixtureSnapshot } = await import('./snapshot.fixture');
+    return getFixtureSnapshot(scenario);
+  }
+
   const db = getSupabase();
 
   // Deterministic "latest displayable run": newest data_date, then the most
