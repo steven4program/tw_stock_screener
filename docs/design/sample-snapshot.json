@@ -1,0 +1,137 @@
+{
+  "_note": "示意資料，僅供 Claude Design 版面設計用。數值為合理範例、非即時真實值。欄位名稱對應前端型別 StockSignal / FilterRow（見 web/lib/types.ts）。前端流程：/api/snapshots/latest 回傳 signals[] → 瀏覽器以 runFilter(signals, {n,x}) 產出下方 rows 與 summary。",
+
+  "snapshot": {
+    "dataDate": "2026-06-09",
+    "generatedAt": "2026-06-09T14:05:00+08:00",
+    "jobStatus": "success",
+    "directorDataMonthLatest": "2026-04"
+  },
+
+  "params": { "n": 2, "x": 15 },
+
+  "summary": { "total": 5, "countA": 4, "countB": 3, "countAB": 2 },
+
+  "rows": [
+    {
+      "tag": "A+B",
+      "matchA": true,
+      "matchB": true,
+      "signal": {
+        "stockId": "9914", "stockName": "美利達", "market": "TWSE",
+        "close": 168.5, "changeRatio": 0.0241, "volumeLots": 4120,
+        "instNetLots": 2150, "instBuyStreak": 8,
+        "directorHoldingPct": 24.8, "directorDataMonth": "2026-04",
+        "ma20": 159.2, "ma20Prev": 157.8, "ma20Holdflat5d": 161.0,
+        "ma60": 154.6, "ma60Prev": 153.9, "ma60Holdflat5d": 156.2,
+        "distMa20Ratio": 0.0584, "distMa60Ratio": 0.0900,
+        "eligibleA": true, "eligibleB": true, "excludeReasonA": null, "excludeReasonB": null
+      },
+      "reasonsA": [
+        "三大法人連買 8 天（門檻 ≥ 2 天）",
+        "董監持股 24.8%，達門檻 15%",
+        "股價在季線上方 9.0%（位於 0~10% 區間）",
+        "季線已上彎"
+      ],
+      "reasonsB": [
+        "三大法人連買 8 天（門檻 ≥ 2 天）",
+        "董監持股 24.8%，達門檻 15%",
+        "股價在月線上方 5.8%（位於 0~10% 區間）",
+        "月線已上彎"
+      ]
+    },
+    {
+      "tag": "A+B",
+      "matchA": true,
+      "matchB": true,
+      "signal": {
+        "stockId": "9921", "stockName": "巨大", "market": "TWSE",
+        "close": 285.5, "changeRatio": 0.0179, "volumeLots": 3180,
+        "instNetLots": 1850, "instBuyStreak": 5,
+        "directorHoldingPct": 17.1, "directorDataMonth": "2026-04",
+        "ma20": 270.0, "ma20Prev": 268.4, "ma20Holdflat5d": 272.5,
+        "ma60": 262.0, "ma60Prev": 261.2, "ma60Holdflat5d": 264.8,
+        "distMa20Ratio": 0.0574, "distMa60Ratio": 0.0897,
+        "eligibleA": true, "eligibleB": true, "excludeReasonA": null, "excludeReasonB": null
+      },
+      "reasonsA": [
+        "三大法人連買 5 天（門檻 ≥ 2 天）",
+        "董監持股 17.1%，達門檻 15%",
+        "股價在季線上方 9.0%（位於 0~10% 區間）",
+        "季線已上彎"
+      ],
+      "reasonsB": [
+        "三大法人連買 5 天（門檻 ≥ 2 天）",
+        "董監持股 17.1%，達門檻 15%",
+        "股價在月線上方 5.7%（位於 0~10% 區間）",
+        "月線已上彎"
+      ]
+    },
+    {
+      "tag": "A",
+      "matchA": true,
+      "matchB": false,
+      "signal": {
+        "stockId": "6488", "stockName": "環球晶", "market": "TPEx",
+        "close": 512.0, "changeRatio": 0.0254, "volumeLots": 1240,
+        "instNetLots": 640, "instBuyStreak": 3,
+        "directorHoldingPct": 46.96, "directorDataMonth": "2026-04",
+        "ma20": 455.0, "ma20Prev": 452.0, "ma20Holdflat5d": 470.0,
+        "ma60": 498.0, "ma60Prev": 496.5, "ma60Holdflat5d": 503.0,
+        "distMa20Ratio": 0.1253, "distMa60Ratio": 0.0281,
+        "eligibleA": true, "eligibleB": true, "excludeReasonA": null, "excludeReasonB": null
+      },
+      "reasonsA": [
+        "三大法人連買 3 天（門檻 ≥ 2 天）",
+        "董監持股 47.0%，達門檻 15%",
+        "股價在季線上方 2.8%（位於 0~10% 區間）",
+        "季線已上彎"
+      ],
+      "reasonsB": []
+    },
+    {
+      "tag": "B",
+      "matchA": false,
+      "matchB": true,
+      "signal": {
+        "stockId": "1707", "stockName": "葡萄王", "market": "TWSE",
+        "close": 142.0, "changeRatio": -0.0035, "volumeLots": 380,
+        "instNetLots": 95, "instBuyStreak": 2,
+        "directorHoldingPct": 22.5, "directorDataMonth": "2026-03",
+        "ma20": 138.5, "ma20Prev": 137.9, "ma20Holdflat5d": 139.8,
+        "ma60": 151.0, "ma60Prev": 151.6, "ma60Holdflat5d": 150.2,
+        "distMa20Ratio": 0.0253, "distMa60Ratio": -0.0596,
+        "eligibleA": true, "eligibleB": true, "excludeReasonA": null, "excludeReasonB": null
+      },
+      "reasonsA": [],
+      "reasonsB": [
+        "三大法人連買 2 天（門檻 ≥ 2 天）",
+        "董監持股 22.5%，達門檻 15%",
+        "股價在月線上方 2.5%（位於 0~10% 區間）",
+        "月線已上彎"
+      ]
+    },
+    {
+      "tag": "A",
+      "matchA": true,
+      "matchB": false,
+      "signal": {
+        "stockId": "8473", "stockName": "山林水", "market": "TPEx",
+        "close": 75.8, "changeRatio": 0.0093, "volumeLots": 210,
+        "instNetLots": 48, "instBuyStreak": 2,
+        "directorHoldingPct": 31.2, "directorDataMonth": "2026-04",
+        "ma20": 71.0, "ma20Prev": 71.4, "ma20Holdflat5d": 72.6,
+        "ma60": 74.2, "ma60Prev": 74.0, "ma60Holdflat5d": 74.9,
+        "distMa20Ratio": 0.0676, "distMa60Ratio": 0.0216,
+        "eligibleA": true, "eligibleB": true, "excludeReasonA": null, "excludeReasonB": null
+      },
+      "reasonsA": [
+        "三大法人連買 2 天（門檻 ≥ 2 天）",
+        "董監持股 31.2%，達門檻 15%",
+        "股價在季線上方 2.2%（位於 0~10% 區間）",
+        "季線 5 個交易日內扣抵向上"
+      ],
+      "reasonsB": []
+    }
+  ]
+}
