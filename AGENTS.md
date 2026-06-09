@@ -55,7 +55,6 @@ Data flow: **free TWSE/TPEx gov endpoints → Supabase (5 tables) → compute si
 ## Conventions
 - Per milestone: plan → execute → merge. Plans in `docs/superpowers/plans/`, specs in `docs/superpowers/specs/`. Execute via subagent-driven-development.
 - Branch before working on `main`. Pure logic always has tests; keep `npm run test` green.
-- Every commit message ends with: `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
 
 ## Coding principles (Karpathy-inspired; bias to caution over speed; use judgment on trivial tasks)
 1. **Think before coding** — state assumptions, ask when unsure, surface tradeoffs and multiple interpretations; don't silently pick.
