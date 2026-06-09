@@ -1,4 +1,4 @@
-// web/lib/snapshot.ts — server-only snapshot reader + pure scenario logic
+// web/lib/snapshot.ts — pure (vitest-safe) snapshot types + scenario logic; no I/O
 import type { StockSignal } from './types';
 
 export type JobStatus = 'running' | 'success' | 'partial_success' | 'failed' | 'no_new_data';
