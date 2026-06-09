@@ -14,11 +14,15 @@ const INST_BACKFILL_DAYS = 30;    // 訊號視窗：最近 30 交易日法人（
 const PRICE_LOOKBACK_CAL = 130;   // 回補價格的日曆天數（~75 交易日）
 const INST_LOOKBACK_CAL = 60;     // 回補法人的日曆天數（~35 交易日）
 
+const THROTTLE_MS = 300; // 對 TWSE/TPEx 網站後端禮貌節流，避免突發大量請求被封
+
 function floorCal(asOf: string, days: number): string {
   const d = new Date(`${asOf}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() - days);
   return d.toISOString().slice(0, 10);
 }
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** 確保最近視窗內每個「實際交易日」的全市場價量/法人都已落地；首次全回補、之後只補缺日（idempotent、self-healing）。 */
 async function ensureMarketData(dataDate: string): Promise<void> {
@@ -28,12 +32,14 @@ async function ensureMarketData(dataDate: string): Promise<void> {
   for (const d of days) {
     if (havePrice.has(d)) continue;
     await upsertPrices(await fetchPrices(d));                          // 逐缺日抓全市場
+    await sleep(THROTTLE_MS);
   }
   const instFrom = floorCal(dataDate, INST_LOOKBACK_CAL);
   const haveInst = await existingDates('institutional_daily', instFrom, dataDate);
   for (const d of days.filter((x) => x >= instFrom)) {
     if (haveInst.has(d)) continue;
     await upsertInstitutional(await fetchInstitutional(d));
+    await sleep(THROTTLE_MS);
   }
 }
 
