@@ -58,3 +58,11 @@ create table if not exists job_runs (
 -- 取「最新成功快照日期」與「防重複鎖」用的索引
 create index if not exists idx_job_runs_status_started on job_runs (status, started_at desc);
 create index if not exists idx_signals_data_date on daily_stock_signals (data_date);
+
+-- 授權給 service_role（後端 API 用 sb_secret_ 金鑰，以 service_role 身分存取）。
+-- 新專案有時不會自動授權，導致 42501 permission denied；以下明確授權並涵蓋未來新表。
+grant usage on schema public to service_role;
+grant select, insert, update, delete on all tables in schema public to service_role;
+grant usage, select on all sequences in schema public to service_role;
+alter default privileges in schema public grant select, insert, update, delete on tables to service_role;
+alter default privileges in schema public grant usage, select on sequences to service_role;
