@@ -15,9 +15,10 @@
 **POC 通過（go）需全部成立：**
 
 1. 對 ≥ 5 檔樣本（混合上市/上櫃，且至少 1 檔已知高董監持股）能取得 `director_holding_pct ∈ [0, 100]`。
-2. 其中 ≥ 2 檔的數值，與公開資訊觀測站網頁顯示的全體董監持股比率人工核對誤差 ≤ 0.5 個百分點。
-3. 能對全市場（上市＋上櫃）列舉並估算涵蓋率，目標 ≥ 95% 的股票可取得數值。
-4. `FINDINGS.md` 明確記載：選定來源、**確切端點/參數/欄位**、更新頻率（每月）、彙總方法（加總股數÷發行股數 或 來源直接提供比率），以此關閉主設計 §11。
+2. **更新頻率為每月、且資料為近月**：上市與上櫃所選來源的 `資料年月` 皆為最近一期（距今 ≤ 2 個月），且來源宣告之更新頻率為每月。⚠️ 政府開放資料集的更新頻率須逐一確認——已知部分上櫃董監明細資料集標示「每1年」；若某市場來源僅為年更，**該市場必須改用每月來源**（見 Task 6 的 MOPS 路徑）才算通過。
+3. 其中 ≥ 2 檔的數值，與公開資訊觀測站網頁顯示的全體董監持股比率人工核對誤差 ≤ 0.5 個百分點，**且比較的是同一個 `資料年月`**。
+4. 能對全市場（上市＋上櫃）列舉並估算涵蓋率，目標 ≥ 95% 的股票可取得數值。
+5. `FINDINGS.md` 明確記載：選定來源、**確切端點/參數/欄位**、各市場更新頻率與最新可得月份、**發行股數欄位來源**、彙總方法，以此關閉主設計 §11。
 
 **POC 失敗（no-go，需回頭調整設計）：** 無任何免費來源能產出每檔 %，或涵蓋率過低。失敗時於 `FINDINGS.md` 記錄已嘗試來源與失敗原因，並提出替代方向。
 
@@ -241,12 +242,13 @@ git commit -m "feat(poc): director-holding aggregation core with tests"
 ```ts
 // src/http.ts
 // 用法：npx tsx src/http.ts <url> <outFile> [method] [body]
-import { writeFile } from 'node:fs/promises';
+import { writeFile, mkdir } from 'node:fs/promises';
+import { dirname } from 'node:path';
 
 export async function fetchText(
   url: string,
   init?: { method?: string; body?: string; headers?: Record<string, string> },
-): Promise<{ status: number; text: string }> {
+): Promise<{ status: number; contentType: string; text: string }> {
   const res = await fetch(url, {
     method: init?.method ?? 'GET',
     body: init?.body,
@@ -256,15 +258,25 @@ export async function fetchText(
       ...init?.headers,
     },
   });
-  return { status: res.status, text: await res.text() };
+  return { status: res.status, contentType: res.headers.get('content-type') ?? '', text: await res.text() };
 }
 
-// 直接從命令列執行：抓一個 URL 存成 fixture
+/** 防呆：擋下把錯誤頁/HTML 當成資料存檔（data.gov.tw 轉址至 mopsfin 可能回傳安全性錯誤頁）。 */
+export function assertNotHtml(text: string, url: string): void {
+  const head = text.slice(0, 500).toLowerCase();
+  if (head.includes('<html') || head.includes('<!doctype html')) {
+    throw new Error(`回應疑似 HTML/錯誤頁而非資料：${url}\n前 500 字：\n${text.slice(0, 500)}`);
+  }
+}
+
+// 直接從命令列執行：抓一個 URL 存成 fixture（自動建立目錄、擋 HTML 錯誤頁）
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [url, out, method, body] = process.argv.slice(2);
-  const { status, text } = await fetchText(url, { method, body });
-  console.log('HTTP', status, 'bytes', text.length);
+  const { status, contentType, text } = await fetchText(url, { method, body });
+  console.log('HTTP', status, 'content-type', contentType, 'bytes', text.length);
   if (out) {
+    assertNotHtml(text, url);
+    await mkdir(dirname(out), { recursive: true });
     await writeFile(out, text);
     console.log('saved to', out);
   } else {
@@ -285,16 +297,25 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 | 5371 | 中光電 | 上櫃 | 上櫃驗證 |
 | 6488 | 環球晶 | 上櫃 | 上櫃驗證 |
 
-- [ ] **Step 3: 冒煙測試抓取工具（任抓一個公開頁面）**
+- [ ] **Step 3: 抓上市公司基本資料（取「已發行股數」欄位，非用資本額估算）**
 
 Run: `cd poc/director-holdings && npx tsx src/http.ts "https://openapi.twse.com.tw/v1/opendata/t187ap03_L" out/twse-basic.raw`
-Expected: 印出 `HTTP 200 bytes <n>`，`out/twse-basic.raw` 產生（上市公司基本資料 JSON，含 `公司代號`、`實收資本額(元)` 等欄位 → 可由 `實收資本額 / 10` 估算已發行股數，供候選 A 之 `aggregateByShares` 使用）。
+Expected: `HTTP 200`，`out/twse-basic.raw` 產生（上市公司基本資料 JSON）。
 
-- [ ] **Step 4: Commit**
+確認其含 `公司代號` 與**已發行股數欄位**（TWSE t187ap03_L 提供 `已發行普通股數或TDR原股發行股數`）。**直接使用此欄位**作為發行股數，**不要**用 `實收資本額 / 10` 估算——非 10 元面額、TDR、私募、特別股都會讓估算失真而產生假 GO。把該欄位的**確切名稱**記到本任務「實測記錄」。
+
+- [ ] **Step 4: 抓上櫃公司基本資料（取「已發行股數」欄位）**
+
+候選端點（待驗證）：TPEx 開放資料的上櫃公司基本資料。於 `https://www.tpex.org.tw/openapi/` 找到含已發行股數的上櫃公司基本資料集後，將其網址代入 `<TPEX_BASIC_URL>`：
+
+Run: `cd poc/director-holdings && npx tsx src/http.ts "<TPEX_BASIC_URL>" out/tpex-basic.raw`
+Expected: `HTTP 200`，`out/tpex-basic.raw` 產生；確認含公司代號與已發行股數欄位，把確切欄位名記到「實測記錄」（上櫃欄位名可能與上市不同）。
+
+- [ ] **Step 5: Commit**
 
 ```bash
 git add poc/director-holdings/src/http.ts
-git commit -m "feat(poc): http fetch util and sample stock list"
+git commit -m "feat(poc): http fetch util, sample stock list, basic-data capture"
 ```
 
 ---
@@ -306,28 +327,35 @@ git commit -m "feat(poc): http fetch util and sample stock list"
 **Files:**
 - Create: `poc/director-holdings/fixtures/datagov-listed.csv`（由步驟抓取產生）
 
-- [ ] **Step 1: 找到資料集與下載網址**
+- [ ] **Step 1: 找到資料集、下載網址、並記錄更新頻率**
 
-於瀏覽器開啟 `https://data.gov.tw`，搜尋「董監事持股餘額明細」。分別找到上市、上櫃兩個資料集，複製其資料分布（distribution）的 CSV 下載網址。將兩個網址記到本任務下方「實測記錄」。
+於瀏覽器開啟 `https://data.gov.tw`，搜尋「董監事持股餘額明細」。分別找到上市、上櫃兩個資料集，複製其資料分布（distribution）的 CSV 下載網址。**同時把每個資料集頁面標示的「更新頻率」抄到本任務「實測記錄」**——⚠️ 已知上櫃版可能標示「每1年」；若為年更則此來源對上櫃**不合格**（轉 Task 6 的 MOPS 每月路徑）。
 
-> 若資料集下載網址為 data.gov.tw 轉址，會被工具回傳轉址 URL；以回傳的最終 URL 再抓一次。
+> 若資料集下載網址為 data.gov.tw 轉址，會被工具回傳轉址 URL；以回傳的最終 URL 再抓一次。部分連結會轉到 `mopsfin.twse.com.tw`，可能回傳安全性錯誤頁（HTML）——`http.ts` 的 `assertNotHtml` 會擋下並報錯；遇此情況改用 data.gov.tw 的 datastore API 或資料集頁的直接檔案連結。
 
 - [ ] **Step 2: 抓上市明細存成 fixture**
 
 Run（將 `<LISTED_CSV_URL>` 換成上一步找到的網址）:
 `cd poc/director-holdings && npx tsx src/http.ts "<LISTED_CSV_URL>" fixtures/datagov-listed.csv`
-Expected: `HTTP 200`，`fixtures/datagov-listed.csv` 內含表頭與多列董監明細。
+Expected: `HTTP 200`，`fixtures/datagov-listed.csv` 內含表頭與多列董監明細。若工具報「疑似 HTML/錯誤頁」→ 連結無效，回 Step 1 換正確的檔案連結。
 
-- [ ] **Step 3: 人工檢視表頭，記錄實際欄位名**
+- [ ] **Step 3: 人工檢視表頭，記錄實際欄位名與資料年月**
 
-開啟 `fixtures/datagov-listed.csv`，把第一列（表頭）原文記到本任務「實測記錄」。特別找出：公司代號、職稱、姓名、**目前持股（股數）**這幾個欄位的**確切名稱**（可能為「目前持股」「持股（股數）」等）。
+開啟 `fixtures/datagov-listed.csv`，把第一列（表頭）原文記到本任務「實測記錄」。特別找出：公司代號、職稱、姓名、**目前持股（股數）**、**出表日期/資料年月** 這幾個欄位的**確切名稱**（可能為「目前持股」「持股（股數）」等）。從資料列讀出實際 `資料年月`（例 `2026-05`）一併記錄。
 
 - [ ] **Step 4: 抓上櫃明細存成 fixture**
 
 Run: `cd poc/director-holdings && npx tsx src/http.ts "<OTC_CSV_URL>" fixtures/datagov-otc.csv`
-Expected: `HTTP 200`，檔案產生。
+Expected: `HTTP 200`，檔案產生（若工具報 HTML 錯誤頁，同 Step 2 處理）。
 
-- [ ] **Step 5: Commit（含 fixture，供解析測試）**
+- [ ] **Step 5: 驗證更新頻率與資料新鮮度（判準 2 的把關）**
+
+對上市與上櫃兩個 fixture：
+- 確認 Step 1 記錄的更新頻率為**每月**；若上櫃為「每1年」→ 在「實測記錄」標記「上櫃 data.gov 不合格、改走 MOPS」，並於 Task 6 對上櫃改用 MOPS。
+- 確認 fixture 的 `資料年月` 距今 ≤ 2 個月。
+- 把「上市最新月份」「上櫃最新月份」「上市/上櫃更新頻率」四項結論寫進「實測記錄」，供 Task 6 同月比較與 Task 8 的 FINDINGS。
+
+- [ ] **Step 6: Commit（含 fixture，供解析測試）**
 
 ```bash
 git add -f poc/director-holdings/fixtures/datagov-listed.csv poc/director-holdings/fixtures/datagov-otc.csv
@@ -346,7 +374,7 @@ git commit -m "test(poc): capture data.gov.tw director-holdings fixtures"
 
 - [ ] **Step 1: 寫失敗測試（用 Task 4 抓到的 fixture）**
 
-> 將 `EXPECTED_COL_*` 換成 Task 4 步驟 3 記錄的**實際欄位名**；`2330` 改成 fixture 中確實存在的代號。
+> `2330` 改成 fixture 中確實存在的代號；明細欄位名的調整在 Step 3 的 `COL` 別名表（依 Task 4 Step 3 記錄的實際表頭），不在本測試碼。
 
 ```ts
 // test/datagov.test.ts
@@ -428,7 +456,9 @@ Expected: PASS。若 FAIL 因欄位名不符，依錯誤訊息印出的「實際
 
 - [ ] **Step 5: 取得已發行股數並算出 2330 的 %（手動驗證腳本）**
 
-新增臨時驗證：用 Task 3 抓到的 `out/twse-basic.raw`（上市公司基本資料 JSON）找出 `2330` 的 `實收資本額(元)`，`已發行股數 = 實收資本額 / 10`，再以 `aggregateByShares(parseDirectorRows(csv,'2330'), 已發行股數)` 計算。
+用 Task 3 抓到的 `out/twse-basic.raw`（上市公司基本資料 JSON）找出 `2330` 的**已發行股數欄位**（`已發行普通股數或TDR原股發行股數`，**直接使用、不用資本額估算**），再以 `aggregateByShares(parseDirectorRows(csv,'2330'), 已發行股數)` 計算。
+
+> 將 `SHARES_COL` 換成 Task 3 步驟 3 記錄的**確切欄位名**。
 
 Run（一次性）:
 ```bash
@@ -436,16 +466,16 @@ cd poc/director-holdings && npx tsx -e "
 import { readFileSync } from 'node:fs';
 import { parseDirectorRows } from './src/sources/datagov.ts';
 import { aggregateByShares } from './src/aggregate.ts';
+const SHARES_COL = '已發行普通股數或TDR原股發行股數';
 const csv = readFileSync('fixtures/datagov-listed.csv','utf8');
 const basic = JSON.parse(readFileSync('out/twse-basic.raw','utf8'));
 const co = basic.find((x)=>x['公司代號']==='2330');
-const shares = Number(String(co['實收資本額(元)']).replace(/,/g,''))/10;
-console.log('已發行股數≈', shares, '全體董監持股%≈', aggregateByShares(parseDirectorRows(csv,'2330'), shares).toFixed(2));
+const shares = Number(String(co[SHARES_COL]).replace(/,/g,''));
+if (!(shares>0)) throw new Error('已發行股數欄位讀取失敗，請確認 SHARES_COL：'+Object.keys(co).join(','));
+console.log('已發行股數=', shares, '全體董監持股%≈', aggregateByShares(parseDirectorRows(csv,'2330'), shares).toFixed(2));
 "
 ```
-Expected: 印出一個介於 0~100 的合理百分比（台積電董監持股偏低，預期個位數%）。記錄到「實測記錄」。
-
-> 面額假設：多數股票面額 10 元，故 `÷10`。若遇無面額/5 元股票，`aggregateByShares` 會偏差 → 在 `FINDINGS.md` 標記此風險與處理方式。
+Expected: 印出一個介於 0~100 的合理百分比（台積電董監持股偏低，預期個位數%）。記錄到「實測記錄」。若 throw → 用錯誤訊息印出的欄位清單修正 `SHARES_COL`。
 
 - [ ] **Step 6: Commit**
 
@@ -463,17 +493,17 @@ git commit -m "feat(poc): parse data.gov.tw director rows + aggregate %"
 **Files:**
 - Create: `poc/director-holdings/src/sources/mops.ts`（僅在需要程式化解析時）
 
-- [ ] **Step 1: 以瀏覽器人工查 2 檔的官方比率**
+- [ ] **Step 1: 以瀏覽器人工查 2 檔的官方比率（指定同一個資料年月）**
 
-開啟 MOPS（`https://mops.twse.com.tw`）→ 公司治理 → 「董監事持股餘額明細資料」，查 `2330` 與一檔上櫃股（如 `6488`）最新月份，記下網頁顯示的「全體董監事持股」比率到「實測記錄」。這是**判準 2** 的人工核對基準。
+開啟 MOPS（`https://mops.twse.com.tw`）→ 公司治理 → 「董監事持股餘額明細資料」，查 `2330` 與一檔上櫃股（如 `6488`）。**查詢月份必須對齊 Task 4 fixture 的 `資料年月`**（同月才可比較），記下網頁顯示的「全體董監事持股」比率到「實測記錄」。這是**判準 3** 的人工核對基準。
 
-- [ ] **Step 2: 比對候選 A 與 MOPS 官方值**
+- [ ] **Step 2: 同月比對候選 A 與 MOPS 官方值**
 
-把 Task 5 算出的 % 與本任務官方比率相減，確認 ≤ 0.5 個百分點。記錄差異。
+把 Task 5/7 算出的 % 與本任務官方比率相減，確認 ≤ 0.5 個百分點。**若兩者資料年月不同，視為無效比較**，需取相同月份重做。記錄差異與所用月份。
 
-- [ ] **Step 3:（僅在候選 A 失敗時）程式化 MOPS**
+- [ ] **Step 3: 上櫃每月來源備援（若 data.gov 上櫃為年更，則此為必做）**
 
-候選端點（待驗證）：`POST https://mops.twse.com.tw/mops/web/ajax_stapap1`，表單參數含 `co_id=<代號>`、`year=<民國年, 2026→115>`、`month=<MM>`、`step=1`、`firstin=1`。用 `src/http.ts` 抓回 HTML 存 fixture，再以 cheerio 解析「全體董監持股比率」儲存格。僅當候選 A 無法滿足判準時才實作此步並補測試。
+當 Task 4 判定上櫃 data.gov 明細為「每1年」或新鮮度不足時，上櫃**改用 MOPS 每月**：以 `src/sources/mops.ts` 程式化抓取。候選端點（待驗證）：`POST https://mops.twse.com.tw/mops/web/ajax_stapap1`，表單參數含 `co_id=<代號>`、`year=<民國年, 2026→115>`、`month=<MM>`、`step=1`、`firstin=1`。用 `src/http.ts`（會自動擋 HTML 錯誤頁）抓回回應存 fixture，以 cheerio 解析「全體董監持股比率」儲存格，並補一個對該 fixture 的解析測試（比照 Task 5 的 TDD 流程）。若 MOPS 直接提供比率，彙總用 `aggregateByRatios`，省去發行股數。
 
 - [ ] **Step 4: Commit（如有產生檔案）**
 
@@ -506,25 +536,36 @@ const SAMPLES: { id: string; name: string; market: 'TWSE' | 'TPEx' }[] = [
   { id: '6488', name: '環球晶', market: 'TPEx' },
 ];
 
-const DATA_MONTH = process.env.DATA_MONTH ?? '';  // 由 fixture 表頭的出表日期填入，例 '2026-05'
+const DATA_MONTH = process.env.DATA_MONTH ?? '';  // 由 Task 4 記錄的 fixture 資料年月填入，例 '2026-05'
+if (!DATA_MONTH) throw new Error('請以 DATA_MONTH=YYYY-MM 執行，對齊 fixture 的資料年月');
 
-function outstandingShares(basic: any[], id: string): number {
-  const co = basic.find((x) => x['公司代號'] === id);
-  if (!co) throw new Error(`基本資料缺 ${id}`);
-  return Number(String(co['實收資本額(元)']).replace(/,/g, '')) / 10;
+// 已發行股數欄位名（依 Task 3 實測記錄調整；上市/上櫃可能不同）
+const SHARES_COL: Record<'TWSE' | 'TPEx', string> = {
+  TWSE: '已發行普通股數或TDR原股發行股數',
+  TPEx: '<TPEX_SHARES_COL>', // ← 換成 out/tpex-basic.raw 的實際欄位名
+};
+
+/** 直接使用基本資料的「已發行股數」欄位；缺值即丟錯，避免假成功。 */
+function outstandingShares(basic: any[], id: string, market: 'TWSE' | 'TPEx'): number {
+  const co = basic.find((x) => String(x['公司代號']).trim() === id);
+  if (!co) throw new Error(`${market} 基本資料缺 ${id}`);
+  const shares = Number(String(co[SHARES_COL[market]] ?? '').replace(/,/g, ''));
+  if (!(shares > 0)) throw new Error(`${market} ${id} 已發行股數讀取失敗（欄位 ${SHARES_COL[market]}）`);
+  return shares;
 }
 
 const listedCsv = readFileSync(new URL('../fixtures/datagov-listed.csv', import.meta.url), 'utf8');
 const otcCsv = readFileSync(new URL('../fixtures/datagov-otc.csv', import.meta.url), 'utf8');
-const basic = JSON.parse(readFileSync(new URL('../out/twse-basic.raw', import.meta.url), 'utf8'));
+const twseBasic = JSON.parse(readFileSync(new URL('../out/twse-basic.raw', import.meta.url), 'utf8'));
+const tpexBasic = JSON.parse(readFileSync(new URL('../out/tpex-basic.raw', import.meta.url), 'utf8'));
 
 const results: DirectorHoldingResult[] = [];
 for (const s of SAMPLES) {
   const csv = s.market === 'TWSE' ? listedCsv : otcCsv;
+  const basic = s.market === 'TWSE' ? twseBasic : tpexBasic;
   const rows = parseDirectorRows(csv, s.id);
-  // 上櫃發行股數來源於 Task 8 補上 TPEx 基本資料；上市先用 TWSE 基本資料
-  const shares = s.market === 'TWSE' ? outstandingShares(basic, s.id) : NaN;
-  const pct = Number.isFinite(shares) ? aggregateByShares(rows, shares) : NaN;
+  if (rows.length === 0) throw new Error(`${s.market} ${s.id} 明細無董監列，請確認 fixture 與代號`);
+  const pct = aggregateByShares(rows, outstandingShares(basic, s.id, s.market)); // 缺股數會 throw，不產生 NaN
   results.push({
     stockId: s.id, stockName: s.name, market: s.market,
     dataMonth: DATA_MONTH, directorHoldingPct: Number(pct.toFixed(2)), method: 'shares',
@@ -541,8 +582,8 @@ console.table(results);
 
 - [ ] **Step 2: 執行 runner**
 
-Run: `cd poc/director-holdings && DATA_MONTH=2026-05 npx tsx src/run.ts`
-Expected: console 印出 5 列結果表；`out/director-holdings-sample.csv` 產生。上市 3 檔應為合理 %；上櫃發行股數待 Task 8 補來源（先允許 NaN）。
+Run（`DATA_MONTH` 換成 Task 4 記錄的實際 fixture 資料年月）: `cd poc/director-holdings && DATA_MONTH=2026-05 npx tsx src/run.ts`
+Expected: console 印出 **5 列**結果表，**每列 `director_holding_pct` 皆為 0~100 的數值（無 NaN）**；`out/director-holdings-sample.csv` 產生。若任一檔缺發行股數或缺明細，腳本會 throw（這是刻意的——避免中途產出看起來成功卻不完整的結果）。
 
 - [ ] **Step 3: Commit**
 
@@ -553,15 +594,19 @@ git commit -m "feat(poc): sample runner outputs director-holdings CSV"
 
 ---
 
-## Task 8: 驗證涵蓋率、補上櫃發行股數，寫 FINDINGS.md 並更新主設計 §11
+## Task 8: 驗證新鮮度與涵蓋率，寫 FINDINGS.md 並更新主設計 §11
 
 **Files:**
 - Create: `poc/director-holdings/FINDINGS.md`
 - Modify: `docs/superpowers/specs/2026-06-09-stock-screener-design.md`（§11 標記 POC 結論）
 
-- [ ] **Step 1: 補上櫃發行股數來源**
+- [ ] **Step 1: 彙整「每月新鮮度 + 更新頻率」結論（判準 2）**
 
-抓 TPEx 上櫃公司基本資料（含實收資本額）以補上櫃發行股數。候選端點（待驗證）：`https://www.tpex.org.tw/openapi/v1/...`（上櫃公司基本資料）。用 `src/http.ts` 抓存 `out/tpex-basic.raw`，比照 TWSE 解析，使 runner 中上櫃 3 檔也得出 %。重跑 runner 確認 5 檔皆有值。
+依 Task 4 Step 5 與 Task 6 的記錄，明確結論並寫進「實測記錄」：
+- 上市：來源＝`<data.gov / MOPS>`、更新頻率＝`<每月?>`、最新可得月份＝`<YYYY-MM>`。
+- 上櫃：來源＝`<data.gov / MOPS>`、更新頻率＝`<每月?>`、最新可得月份＝`<YYYY-MM>`。
+- 確認兩者距今皆 ≤ 2 個月、且皆為**每月**來源（若 data.gov 上櫃為年更，此處應已改為 MOPS）。
+- 若任一市場無每月來源 → 本 POC 對該市場為 **no-go**，於 FINDINGS 明確記錄。
 
 - [ ] **Step 2: 估算全市場涵蓋率**
 
@@ -586,12 +631,11 @@ for (const f of ['fixtures/datagov-listed.csv','fixtures/datagov-otc.csv']) {
 ## 判定：GO / NO-GO
 <填入 go 或 no-go，並一句話總結>
 
-## 選定來源
-- 名稱：<data.gov.tw 董監事持股餘額明細 / MOPS 全體董監持股比率>
-- 上市端點：<確切 URL>
-- 上櫃端點：<確切 URL>
-- 發行股數來源（若採加總股數法）：<TWSE/TPEx 基本資料端點；面額假設>
-- 更新頻率：每月；出表日期欄位＝<欄位名>；可得最新月份＝<YYYY-MM>
+## 選定來源（分上市/上櫃）
+- 上市：來源＝<data.gov 明細 / MOPS 比率>、端點＝<確切 URL>、更新頻率＝<每月>、最新月份＝<YYYY-MM>
+- 上櫃：來源＝<data.gov 明細 / MOPS 比率>、端點＝<確切 URL>、更新頻率＝<每月>、最新月份＝<YYYY-MM>
+- 發行股數來源（採加總股數法時）：<TWSE t187ap03_L 已發行股數欄位名 / TPEx 對應欄位名>（**直接取已發行股數欄位，非用資本額估算**）
+- 出表日期/資料年月欄位＝<欄位名>
 - 編碼：<UTF-8 / Big5>
 
 ## 欄位對應
@@ -616,9 +660,10 @@ for (const f of ['fixtures/datagov-listed.csv','fixtures/datagov-otc.csv']) {
 - 涵蓋率：<…>%
 
 ## 風險 / 注意
-- 面額非 10 元股票的發行股數估算偏差：<處理方式>
+- 已發行股數欄位的特例（TDR 原股、特別股、私募股）：<是否需含特別股、處理方式>
+- 上櫃來源更新頻率（data.gov 若為年更已改 MOPS）：<結論>
 - 月資料延遲：當月公布日約為 <…>
-- 反爬 / 速率限制：<…>
+- 反爬 / 速率限制 / 編碼（Big5）：<…>
 
 ## 對主設計的影響（關閉 §11）
 - `director_holdings_monthly` 寫入流程採用本來源；管線「董監抓取」步驟改為 <每月觸發/每日檢查當月是否已公布>。
