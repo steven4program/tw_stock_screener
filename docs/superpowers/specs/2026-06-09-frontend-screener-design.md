@@ -66,11 +66,14 @@ getLatestSnapshot(): Promise<{
 
 讀取步驟：
 1. `display` = 最新一筆 `status ∈ {success, partial_success}` 且 `data_date` 非 null 的 `job_runs`（依 `data_date` 降序）。其 `signals` 經 `readSignalsByDate(display.data_date)` 讀出。
-2. `latest` = 最新一筆**任意狀態**的 `job_runs`（依 `started_at` 降序）—— 用來判斷今天那次是否失敗/無新資料。
-3. `scenario = deriveScenario(latest.status, display.status)`（見 §4）。
-4. 無任何 `display`（全新 DB）→ `scenario = 'no_data'`、`signals = []`。
+2. `latest` = 最新一筆**任意狀態**的 `job_runs`（依 `started_at` 降序）—— 僅用其 `status` 判斷最近一次是否 `failed`。
+3. `today` = 伺服器計算的**台北時區當日**（`'YYYY-MM-DD'`，例：`new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'})`）；注入 `deriveScenario` 以保純函式可測。
+4. `scenario = deriveScenario({ latestStatus: latest.status, displayStatus: display.status, displayDataDate: display.data_date, today, staleAfterDays: 4 })`（見 §4）。
+5. 無任何 `display`（全新 DB）→ `scenario = 'no_data'`、`signals = []`，不呼叫 `deriveScenario`。
 
 API route `/api/snapshots/latest` 回傳上述完整物件（取代目前的 `{ dataDate, jobStatus, generatedAt, signals }`；尚無前端消費者，可自由變更）。
+
+**伺服器專用邊界（重要）**：`web/lib/snapshot.ts` 使用 service-role Supabase client（讀伺服器端 env），**僅供伺服器端**（RSC `page.tsx` 與 route handler）使用，檔首加 `import 'server-only'` 作 build-time 守門，**嚴禁被 client component import**。`Screener`（client island）只透過 props 取得資料，絕不直接連 DB —— 與系統 spec §2「前端不直接查資料表」一致（憑證始終留在伺服器；client 從不持有）。需新增 `server-only` 套件（1 行依賴）。
 
 ---
 
@@ -78,18 +81,35 @@ API route `/api/snapshots/latest` 回傳上述完整物件（取代目前的 `{ 
 
 ```ts
 type Scenario = 'success' | 'stale' | 'partial' | 'failed' | 'no_data';
-// empty 不在此：由 Client 端「某分頁/參數下 0 檔」即時判定
-deriveScenario(latest: JobStatus, display: 'success' | 'partial_success'): Scenario
+// no_data 在 getLatestSnapshot 處理（無 display 時）；empty 由 Client 端「某分頁/參數 0 檔」即時判定
+deriveScenario(input: {
+  latestStatus: JobStatus;                          // 最近一次 job_run 狀態（running|success|partial_success|failed|no_new_data）
+  displayStatus: 'success' | 'partial_success';     // 顯示中快照的狀態
+  displayDataDate: string;                          // 顯示中快照的資料日 'YYYY-MM-DD'
+  today: string;                                    // 台北時區當日（注入）
+  staleAfterDays?: number;                          // 預設 4
+}): 'success' | 'stale' | 'partial' | 'failed'
+```
+
+```ts
+// 純函式；daysBetween 以 UTC 午夜相減算日曆天數
+const days = daysBetween(displayDataDate, today);        // (today - displayDataDate)
+if (latestStatus === 'failed') return 'failed';
+if (days > (staleAfterDays ?? 4)) return 'stale';
+if (displayStatus === 'partial_success') return 'partial';
+return 'success';
 ```
 
 優先序 **failed › stale › partial › success**：
 
 | 順位 | scenario | 條件 | StatusBar |
 |---|---|---|---|
-| 1 | `failed` | `latest === 'failed'` | ⛔ bad；「今日更新失敗（顯示為上次成功資料 {lastSuccessDate}）」，日期用 `lastSuccessDate` |
-| 2 | `stale` | `latest ∈ {'no_new_data','running'}` | ⚠️ warn；「今日尚未更新（沿用 {lastSuccessDate} 資料）」 |
-| 3 | `partial` | `display === 'partial_success'` | ✅ ok 主訊息 + 琥珀子標「董監資料沿用 {directorDataMonthLatest} 月份」 |
+| 1 | `failed` | `latestStatus === 'failed'` | ⛔ bad；「更新失敗（顯示為上次成功資料 {lastSuccessDate}）」，日期用 `lastSuccessDate` |
+| 2 | `stale` | `daysBetween(displayDataDate, today) > staleAfterDays`（預設 4） | ⚠️ warn；「資料尚未更新（最後更新 {lastSuccessDate}）」 |
+| 3 | `partial` | `displayStatus === 'partial_success'` | ✅ ok 主訊息 + 琥珀子標「董監資料沿用 {directorDataMonthLatest} 月份」 |
 | 4 | `success` | 以上皆非 | ✅ ok；「今日已更新 ・ 資料日期 {dataDate}」 |
+
+**設計理由**：系統不自維交易日曆（系統 spec §4），故 `no_new_data`/`running` 是「目前已是最新」的健康狀態（含週末/假日），**不可視為 stale**；同日成功後再次 `no_new_data` 因 `days==0` 自然不會誤判為 stale。`stale` 改以「顯示中資料日距今超過 `staleAfterDays`」這個粗略時鐘新鮮度判定（非交易日曆），用於偵測「管線疑似卡住、資料明顯過舊」。`staleAfterDays=4` 可容忍一般週末；超長假期（如農曆年）可能短暫示警，數值可調。文案改用「資料較舊/最後更新」而非「今日尚未更新」，以符合新鮮度語意。
 
 > 註：系統不自維交易日曆（系統 spec §4），故「stale」語意為「最近一次嘗試未產生更新的資料」，而非以日曆日比對。
 
@@ -157,14 +177,31 @@ deriveScenario(latest: JobStatus, display: 'success' | 'partial_success'): Scena
 | `sort` | `'composite'｜ManualSortKey` | `'composite'` |
 | `open` | `Set<stockId>` 或 map | 空 |
 
-流程：`runFilter(initial.signals, {n,x})` → 依 `tab` 過濾 → 依 `sort`（綜合用 filter.ts 內建排序；其餘 `manualSort`）→ 渲染。調 N/X/分頁/排序即時重算；展開以 `stockId` 記錄、各列獨立。展開區不用 opacity 進場動畫（截圖/reduced-motion 可見）。
+流程：`runFilter(initial.signals, {n,x})` → 依 `tab` 過濾 → 依 `sort` 排序 → 渲染。調 N/X/分頁/排序即時重算；展開以 `stockId` 記錄、各列獨立。展開區不用 opacity 進場動畫（截圖/reduced-motion 可見）。
+
+**排序方向（`manualSort` 需 `dir`）**：`composite` 用 `runFilter` 內建排序；其餘呼叫 `manualSort(rows, key, SORT_DIR[key])`，方向固定對應（與 prototype `data.js` 一致）：
+
+| key | 方向 | 理由 |
+|---|---|---|
+| `dist` | `asc` | 距均線越近越前 |
+| `streak` / `buyLots` / `volume` / `director` | `desc` | 數值越大越前 |
+
+即 `const SORT_DIR = { dist: 'asc', streak: 'desc', buyLots: 'desc', volume: 'desc', director: 'desc' } as const;`。
 
 ---
 
 ## 10. 測試與驗收
 
 依專案慣例（純邏輯必有測試，不為 UI 引入 React 測試框架）：
-- **vitest 單元測試**：`lib/format.ts`（價格小數邊界、漲跌號、stale 月份、trendShort）、`lib/snapshot.ts` 的 `deriveScenario`（4 種 server 狀態 + 優先序交叉案例）。
+- **vitest 單元測試**：
+  - `lib/format.ts`：價格小數邊界（≥100 取 1 位、<100 取 2 位）、漲跌號（正帶 `+`、零、負）、stale 月份、trendShort（已上彎/扣抵向上）。
+  - `lib/snapshot.ts` 的 `deriveScenario`，**至少涵蓋**：
+    - **回歸（friend finding 1）**：同日成功後再次 `no_new_data`（`latestStatus='no_new_data'`、`displayStatus='success'`、`displayDataDate===today`）→ `success`（不得 stale）。
+    - `latestStatus='success'`、新鮮 → `success`；`displayStatus='partial_success'`、新鮮 → `partial`。
+    - `latestStatus='failed'`（不論新鮮度）→ `failed`（驗 failed › stale 優先）。
+    - `displayDataDate` 距 `today` 5 天（>4）→ `stale`；display partial 且過舊 → `stale`（驗 stale › partial）。
+    - 週末不誤判：`displayDataDate=週五`、`today=週一`（3 天）→ `success`。
+    - `daysBetween` 純函式：跨月/UTC 邊界正確。
 - `npx tsc --noEmit` 無誤 · `npm run test` 全綠 · `npm run build` 成功。
 - 手動：`npm run dev` 載入主頁，驗 happy path、N/X 即時重篩、分頁/排序、展開原因、皮膚切換、手機卡片斷點（≤720px）。
 
