@@ -43,3 +43,58 @@ export function changeRatio(closes: number[]): number | null {
   if (prev === 0) return null;
   return (today - prev) / prev;
 }
+
+const SIM_DAYS = 5;
+
+export function computeSignals(input: SignalInput): StockSignal {
+  const { closes } = input;
+  const close = closes[closes.length - 1];
+
+  const ma20 = sma(closes, 20, 0);
+  const ma20Prev = sma(closes, 20, 1);
+  const ma20Holdflat5d = holdflat(closes, 20, SIM_DAYS);
+  const ma60 = sma(closes, 60, 0);
+  const ma60Prev = sma(closes, 60, 1);
+  const ma60Holdflat5d = holdflat(closes, 60, SIM_DAYS);
+
+  const distMa20Ratio = ma20 !== null ? (close - ma20) / ma20 : null;
+  const distMa60Ratio = ma60 !== null ? (close - ma60) / ma60 : null;
+
+  const hasDirector = input.directorHoldingPct !== null;
+  const has60 = closes.length >= 60;
+  const has20 = closes.length >= 20;
+
+  const excludeReasonA: ExcludeReason | null = !hasDirector
+    ? 'missing_director'
+    : !has60
+      ? 'insufficient_history_60'
+      : null;
+  const excludeReasonB: ExcludeReason | null = !hasDirector
+    ? 'missing_director'
+    : !has20
+      ? 'insufficient_history_20'
+      : null;
+
+  const todayInst = input.instNetLots[input.instNetLots.length - 1] ?? 0;
+
+  return {
+    dataDate: input.dataDate,
+    stockId: input.stockId,
+    stockName: input.stockName,
+    market: input.market,
+    close,
+    changeRatio: changeRatio(closes),
+    volumeLots: input.volumeLots,
+    instNetLots: todayInst,
+    instBuyStreak: buyStreak(input.instNetLots),
+    directorHoldingPct: input.directorHoldingPct,
+    directorDataMonth: input.directorDataMonth,
+    ma20, ma20Prev, ma20Holdflat5d,
+    ma60, ma60Prev, ma60Holdflat5d,
+    distMa20Ratio, distMa60Ratio,
+    eligibleA: hasDirector && has60,
+    eligibleB: hasDirector && has20,
+    excludeReasonA,
+    excludeReasonB,
+  };
+}
