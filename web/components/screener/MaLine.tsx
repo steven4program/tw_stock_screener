@@ -8,12 +8,10 @@ export function MaLine({ kind, sig }: { kind: 'A' | 'B'; sig: StockSignal }) {
   const val = isA ? sig.ma60 : sig.ma20;
   const dist = isA ? sig.distMa60Ratio : sig.distMa20Ratio;
   const status = trendShort(kind, sig);
-  const d = dist ?? 0;
-  const sign = d >= 0 ? '+' : '';
   return (
     <div className="ma-line num">
       <span>{name} <b>{val !== null ? fmt.price(val) : '—'}</b></span>
-      <span>距均線 <b>{sign}{fmt.pct1(d)}%</b></span>
+      <span>距均線 <b>{dist !== null ? `${dist >= 0 ? '+' : ''}${fmt.pct1(dist)}%` : '—'}</b></span>
       <span>狀態 <b>{status === '已上彎' ? '↑ 已上彎' : '↗ 扣抵向上'}</b></span>
     </div>
   );
