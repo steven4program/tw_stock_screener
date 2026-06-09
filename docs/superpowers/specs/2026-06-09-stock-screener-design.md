@@ -101,9 +101,11 @@
 3. 比對 `data_date` 是否比資料庫既有最新快照更新：
    - 更新 → 寫入原始來源表，續跑計算。
    - 未更新（同一天或更舊）→ `job_runs.status = no_new_data`，不覆蓋既有快照。
-4. 維護滾動股價歷史（`stock_price_history`）：每日只新增當天，足以計算 60MA（保留至少約 70 個交易日）。首次啟動時回補近期歷史以建立均線與連買天數基準。
+4. 維護滾動原始歷史，每日只新增當天：
+   - **股價**（`stock_price_history`）：保留並回補最近 **70 個交易日**（足以計算 60MA 與扣抵值）。
+   - **法人**（`institutional_daily`）：首次／補資料時回補最近 **30 個交易日**（足以正確計算連買天數，並涵蓋可調參數 `N` 的上限）。
 5. 計算每檔原始訊號（見 §6 與 §5 schema），寫入 `daily_stock_signals`。
-6. 寫入 `job_runs`（狀態、處理檔數、耗時、錯誤訊息、處理的 `data_date`）。
+6. 寫入 `job_runs`（狀態、起訖時間、處理檔數、排除統計、錯誤訊息、處理的 `data_date`）。
 
 ---
 
@@ -166,28 +168,57 @@
 | `ma60_holdflat_5d` | numeric, null | 假設未來 5 交易日收盤＝今日收盤的扣抵後季線（純計算，非預測） |
 | `dist_ma20_ratio` | numeric, null | (close − ma20) / ma20（小數比例） |
 | `dist_ma60_ratio` | numeric, null | (close − ma60) / ma60（小數比例） |
-| `data_quality_status` | text | `ok` / `insufficient_history` / `missing_director` / `partial`（見 §9） |
-| `exclude_reason` | text, null | 被排除原因（可為空；null 代表資料完整） |
+| `eligible_a` | boolean | 是否具備評估**條件 A** 的完整資料（有 60MA 且有董監資料） |
+| `eligible_b` | boolean | 是否具備評估**條件 B** 的完整資料（有 20MA 且有董監資料） |
+| `exclude_reason_a` | text, null | 不具 A 評估資格的原因代碼（可為空） |
+| `exclude_reason_b` | text, null | 不具 B 評估資格的原因代碼（可為空） |
 | 主鍵 | | `(data_date, stock_id)` |
 
-> `ma60_holdflat_5d` 算法：`(sum(最近 55 日收盤) + 5 × 今日收盤) / 60`。`ma20_holdflat_5d` 同理：`(sum(最近 15 日收盤) + 5 × 今日收盤) / 20`。
+> `ma*` 與 `ma*_holdflat_5d` 的精確公式見 §6.1。`eligible_a` / `eligible_b` 與其 reason 代碼見 §9。
 
 ### 5.5 `job_runs`（營運：每日更新狀態）
 
 | 欄位 | 型別 | 說明 |
 |---|---|---|
-| `run_at` | timestamptz | 執行時間 |
+| `started_at` | timestamptz | 開始時間 |
+| `finished_at` | timestamptz, null | 結束時間（執行中為 null） |
 | `data_date` | date, null | 本次處理的交易日 |
-| `status` | text | `running` / `success` / `failed` / `no_new_data` |
+| `status` | text | `running` / `success` / `partial_success` / `failed` / `no_new_data` |
 | `stocks_processed` | int | 處理檔數 |
-| `duration_ms` | int | 耗時 |
-| `error_message` | text, null | 失敗原因 |
+| `eligible_a_count` / `eligible_b_count` | int | 具 A／B 評估資格的檔數 |
+| `excluded_count` | int | 被排除（A、B 皆不具資格）檔數 |
+| `exclude_stats` | jsonb | 排除原因統計，如 `{"insufficient_history_60":12,"insufficient_history_20":3,"missing_director":40}` |
+| `error_message` | text, null | 失敗原因（`partial_success` / `failed` 時填寫） |
+
+> `partial_success` 定義：部分資料來源成功（例如股價、法人成功但董監抓取失敗），仍寫出當日快照但標記為 partial，前端據此提示「董監資料可能過期／缺漏」。
 
 ---
 
 ## 6. 篩選引擎（讀取時即時計算，可調 `N`、`X`）
 
-對快照中每一檔，套用條件。固定參數：距均線帶 `[0%, 10%]`、扣抵 5 個交易日、月線 20MA／季線 60MA。可調參數：`N`（連買天數，預設 2）、`X`（董監持股%，預設 15）。
+對快照中每一檔，套用條件。固定參數：距均線帶 `[0%, 10%]`、扣抵 5 個交易日、月線 20MA／季線 60MA。
+
+**可調參數與範圍**
+
+| 參數 | 意義 | 範圍 | 預設 |
+|---|---|---|---|
+| `N` | 三大法人連買天數門檻 | 整數 1–10 | 2 |
+| `X` | 董監持股 % 門檻 | 0–100 | 15 |
+
+其餘為固定參數，MVP 不開放調整。
+
+### 6.1 均線與扣抵值精確公式
+
+設 `c[t]` 為最新交易日收盤、`c[t-1]`、`c[t-2]`… 為往前各交易日收盤：
+
+- `ma60 = ( Σ_{i=0..59} c[t-i] ) / 60` —— 需至少 60 筆實際收盤，否則為 `null`
+- `ma60_prev = ( Σ_{i=0..59} c[t-1-i] ) / 60` —— 即 `c[t-1] … c[t-60]` 之平均
+- `ma60_holdflat_5d = ( Σ_{i=0..54} c[t-i] + 5 × c[t] ) / 60`
+- `ma20 = ( Σ_{i=0..19} c[t-i] ) / 20` —— 需至少 20 筆實際收盤，否則為 `null`
+- `ma20_prev = ( Σ_{i=0..19} c[t-1-i] ) / 20`
+- `ma20_holdflat_5d = ( Σ_{i=0..14} c[t-i] + 5 × c[t] ) / 20`
+
+`holdflat` 的意義：假設未來 5 個交易日收盤都等於今日收盤 `c[t]`，則 5 日後的均線值（扣抵掉最舊的 5 筆、補進 5 筆今日收盤）。為純算術，**非預測**。
 
 **條件 A（季線型）— 全部成立：**
 
@@ -212,7 +243,7 @@
 - 股價在季線上方 2.1%（位於 0~10% 區間）
 - 季線已上彎（或：季線 5 個交易日內扣抵向上）
 
-**連買天數計算**：以 `institutional_daily.net_lots > 0` 的連續天數計；當日無法人資料（未交易）視為中斷、歸零（保守）。
+**連買天數計算**：以 `institutional_daily.net_lots > 0` 的連續天數計；當日無法人資料（未交易）視為中斷、歸零（保守）。初次回補上限為 30 個交易日；連買長於此者，在累積足夠歷史前以「≥30」表示。
 
 ---
 
@@ -222,6 +253,13 @@
 |---|---|---|
 | `/api/snapshots/latest` | GET | 回傳最新一筆成功快照：`data_date`、`generated_at`、`job_status`、`signals[]`（全市場原始訊號）。前端據此在瀏覽器端篩選／排序。 |
 | `/api/jobs/run` | POST | 觸發資料管線；受 `CRON_SECRET` 保護。Vercel Cron 每日呼叫，亦供手動補跑。 |
+
+**`/api/jobs/run` 防重複執行**
+
+- 進入時若已存在 `status = running` 且未逾時的 `job_runs` → 回 **409**，不重複啟動。
+- 啟動即寫入一筆 `running` 列作為鎖（搭配 DB advisory lock／唯一性約束防併發）。
+- 若解析出的 `data_date` 已有成功快照 → 回 `no_new_data`、不重算。
+- 逾時保護：`running` 超過 30 分鐘視為失效鎖，允許新一次執行接手。
 
 > 前端不直接連 Supabase；資料庫憑證僅存在於伺服器端 API。
 
@@ -266,18 +304,22 @@
 
 ## 9. 邊界情況與資料品質
 
-每檔以 `data_quality_status` 標記，被排除者填 `exclude_reason`：
+每檔**分別**以 `eligible_a` / `eligible_b` 判斷是否具備評估各條件的資料；不具資格者於 `exclude_reason_a` / `exclude_reason_b` 記錄原因代碼。一檔可能「具 B 資格但不具 A 資格」（例如歷史介於 20~59 日，有 20MA 但無 60MA）。
 
-| 情況 | `data_quality_status` | 處理 |
-|---|---|---|
-| 資料完整 | `ok` | 正常參與篩選 |
-| 上市未滿 60 日（無法算季線） | `insufficient_history` | 不納入 A；若亦未滿 20 日則一併不納入 B |
-| 缺董監資料 | `missing_director` | 條件 2 無法確認 → 不納入 A、B（fail-closed） |
-| 部分資料缺漏 | `partial` | 視缺漏項目保守排除對應條件 |
+| 情況 | `eligible_a` | `eligible_b` | reason 代碼 |
+|---|---|---|---|
+| 資料完整（≥60 日且有董監） | true | true | — |
+| 歷史 20~59 日（有 20MA、無 60MA）且有董監 | false | true | A：`insufficient_history_60` |
+| 歷史 < 20 日 | false | false | `insufficient_history_20`（A 另記 `insufficient_history_60`） |
+| 缺董監資料 | false | false | `missing_director`（A、B 皆記） |
+
+reason 代碼集合：`insufficient_history_60`、`insufficient_history_20`、`missing_director`。
+
+> **原則：寧可漏報、不要誤報（fail-closed）**。前端篩選時，僅對 `eligible_a` 為真者套用條件 A、`eligible_b` 為真者套用條件 B。
 
 - **管線失敗**：`job_runs.status = failed`，前端頂部顯示警告，並沿用上一次成功快照與其資料日期。
+- **部分成功**：`job_runs.status = partial_success`（見 §5.5），前端提示對應資料可能過期／缺漏。
 - **非交易日**：管線照常觸發；若無新資料 → `no_new_data`，不覆蓋既有快照。
-- 原則一致：**寧可漏報，不要誤報**（fail-closed）。
 
 ---
 
@@ -290,9 +332,11 @@
 
 ---
 
-## 11. 待定項目（實作計畫階段鎖定）
+## 11. 待定項目與實作前置
 
 - **董監持股確切來源端點與解析方式**：公開資訊觀測站「董監事持股餘額明細」或「全體董監持股成數」報表的實際抓取與欄位解析；如何由明細彙總為「全體董監持股 %」。資料本身確定免費、每月更新。
+
+- **實作前置（必做）：董監持股資料 POC**。在進入完整實作前，先做一支小型驗證腳本：確認能否從公開資訊觀測站實際**抓取並解析**出每檔的「全體董監持股 %」（含上市與上櫃）。這是本專案**唯一沒有現成 API** 的資料相依、風險最高。**POC 通過後才繼續建其餘部分**；若該來源不可行，需在此階段改尋替代來源並回頭調整設計。實作計畫須將此 POC 列為第一個里程碑。
 
 ---
 
