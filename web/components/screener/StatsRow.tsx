@@ -10,9 +10,9 @@ export function StatsRow({ summary }: { summary: FilterSummary }) {
   ];
   return (
     <div className="stats">
-      {items.map(([lab, n, ab]) => (
+      {items.map(([lab, count, ab]) => (
         <div key={lab} className={'stat' + (ab ? ' is-ab' : '')}>
-          <div className="s-num num">{n} <span style={{ fontSize: '16px', fontWeight: 600, color: 'var(--ink-2)' }}>檔</span></div>
+          <div className="s-num num">{count} <span style={{ fontSize: '16px', fontWeight: 600, color: 'var(--ink-2)' }}>檔</span></div>
           <div className="s-lab">{lab}</div>
         </div>
       ))}

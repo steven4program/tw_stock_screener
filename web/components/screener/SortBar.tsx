@@ -1,6 +1,5 @@
 // web/components/screener/SortBar.tsx
-import type { SortKey } from './types';
-import { SORT_OPTIONS } from './types';
+import { type SortKey, SORT_OPTIONS } from './types';
 
 export function SortBar({ sort, onSort, count }: {
   sort: SortKey; onSort: (s: SortKey) => void; count: number;
