@@ -23,3 +23,23 @@ export function holdflat(closes: number[], window: number, simDays = 5): number 
   for (let i = keepStart; i < keepEnd; i++) sum += closes[i];
   return sum / window;
 }
+
+/** 三大法人合計連續買超天數：從最新往前數，遇 null 或 <=0 中斷。 */
+export function buyStreak(instNetLots: (number | null)[]): number {
+  let streak = 0;
+  for (let i = instNetLots.length - 1; i >= 0; i--) {
+    const v = instNetLots[i];
+    if (v !== null && v > 0) streak++;
+    else break;
+  }
+  return streak;
+}
+
+/** 漲跌幅（小數比例），相對前一交易日收盤；不足兩筆回 null。 */
+export function changeRatio(closes: number[]): number | null {
+  if (closes.length < 2) return null;
+  const today = closes[closes.length - 1];
+  const prev = closes[closes.length - 2];
+  if (prev === 0) return null;
+  return (today - prev) / prev;
+}

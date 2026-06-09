@@ -1,6 +1,6 @@
 // web/lib/__tests__/signals.test.ts
 import { describe, it, expect } from 'vitest';
-import { sma, holdflat } from '../signals';
+import { sma, holdflat, buyStreak, changeRatio } from '../signals';
 
 describe('sma（時間升冪，視窗取結尾）', () => {
   const closes = [1, 2, 3, 4, 5]; // 最後一筆＝今日
@@ -37,5 +37,29 @@ describe('holdflat（假設未來 5 日收盤＝今日收盤）', () => {
 
   it('資料不足視窗回 null', () => {
     expect(holdflat([1, 2, 3], 20, 5)).toBeNull();
+  });
+});
+
+describe('buyStreak（從最新往前數連續 >0）', () => {
+  it('結尾連續 3 天 >0', () => {
+    expect(buyStreak([-1, 0, 5, 2, 8])).toBe(3);
+  });
+  it('最新一天為 0 → 0', () => {
+    expect(buyStreak([5, 5, 0])).toBe(0);
+  });
+  it('null（無資料）中斷連續', () => {
+    expect(buyStreak([3, null, 4, 6])).toBe(2);
+  });
+  it('全部 >0 → 等於長度', () => {
+    expect(buyStreak([1, 2, 3])).toBe(3);
+  });
+});
+
+describe('changeRatio', () => {
+  it('(close - 前一日)/前一日', () => {
+    expect(changeRatio([100, 102])).toBeCloseTo(0.02, 9);
+  });
+  it('僅一筆收盤 → null', () => {
+    expect(changeRatio([100])).toBeNull();
   });
 });
