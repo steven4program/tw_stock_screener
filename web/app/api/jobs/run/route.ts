@@ -51,3 +51,6 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json({ status: 'failed', error: (e as Error).message }, { status: 500 });
   }
 }
+
+// Vercel Cron 以 GET 觸發；沿用同一處理邏輯
+export const GET = POST;
