@@ -18,7 +18,7 @@
 
 **今日確定的決策（與使用者）**
 1. **樣式**：直接移植設計稿的 `styles.css`（design tokens + container queries）為全域 CSS，不引入 Tailwind。
-2. **狀態列**：擴充 API 以支援設計的全部 5 種狀態（success / stale / partial / failed / empty）。
+2. **狀態列**：畫面支援 success / stale / partial / failed / empty 五種狀態；其中 **empty 為 client 端判定**（某分頁/參數 0 檔），其餘四種由伺服器擴充 API/RSC 推導，另含 **no_data**（空庫）。
 3. **元件位置**：`web/components/screener/`（對齊既有的頂層 `web/lib/`，非 `app/_components/`）。
 4. **皮膚**：保留三種皮膚（預設 / 報紙 paper / 大字高對比 bold），提供正式的切換器（cookie 持久化）。
 5. **狀態優先序**：failed › stale › partial › success。
@@ -109,9 +109,7 @@ return 'success';
 | 3 | `partial` | `displayStatus === 'partial_success'` | ✅ ok 主訊息 + 琥珀子標「董監資料沿用 {directorDataMonthLatest} 月份」 |
 | 4 | `success` | 以上皆非 | ✅ ok；「今日已更新 ・ 資料日期 {dataDate}」 |
 
-**設計理由**：系統不自維交易日曆（系統 spec §4），故 `no_new_data`/`running` 是「目前已是最新」的健康狀態（含週末/假日），**不可視為 stale**；同日成功後再次 `no_new_data` 因 `days==0` 自然不會誤判為 stale。`stale` 改以「顯示中資料日距今超過 `staleAfterDays`」這個粗略時鐘新鮮度判定（非交易日曆），用於偵測「管線疑似卡住、資料明顯過舊」。`staleAfterDays=4` 可容忍一般週末；超長假期（如農曆年）可能短暫示警，數值可調。文案改用「資料較舊/最後更新」而非「今日尚未更新」，以符合新鮮度語意。
-
-> 註：系統不自維交易日曆（系統 spec §4），故「stale」語意為「最近一次嘗試未產生更新的資料」，而非以日曆日比對。
+**設計理由**：系統不自維交易日曆（系統 spec §4），故 `no_new_data`/`running` 是「目前已是最新」的健康狀態（含週末/假日），**不可視為 stale**；同日成功後再次 `no_new_data` 因 `days==0` 自然不會誤判為 stale。`stale` 改以「顯示中資料日距今超過 `staleAfterDays`」這個粗略時鐘新鮮度判定（非交易日曆），用於偵測「管線疑似卡住、資料明顯過舊」。`staleAfterDays=4` 可容忍一般週末；超長假期（如農曆年）可能短暫示警，數值可調。文案改用「資料較舊/最後更新」而非「今日尚未更新」，以符合新鮮度語意。**`stale` 僅由上述時鐘新鮮度判定，切勿復用舊的 `no_new_data ⇒ stale` 行為。**
 
 ---
 
