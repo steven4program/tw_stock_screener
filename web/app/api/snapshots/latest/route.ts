@@ -1,6 +1,7 @@
 // web/app/api/snapshots/latest/route.ts
 import { NextResponse } from 'next/server';
 import { getSupabase } from '@/lib/supabase';
+import { readSignalsByDate } from '@/lib/repo';
 
 export const revalidate = 0;
 
@@ -18,12 +19,10 @@ export async function GET(): Promise<Response> {
   }
   const job = jobs[0];
 
-  const { data: rows, error: sErr } = await db
-    .from('daily_stock_signals').select('*').eq('data_date', job.data_date);
-  if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
+  const rows = await readSignalsByDate(job.data_date as string); // 分頁讀全部，避免 1000 列截斷
 
   // DB snake_case → 前端 camelCase（對齊 web/lib/types.ts 的 StockSignal）
-  const signals = (rows ?? []).map((r) => ({
+  const signals = rows.map((r) => ({
     dataDate: r.data_date, stockId: r.stock_id, stockName: r.stock_name, market: r.market,
     close: num(r.close), changeRatio: num(r.change_ratio), volumeLots: num(r.volume_lots),
     instNetLots: num(r.inst_net_lots), instBuyStreak: r.inst_buy_streak ?? 0,

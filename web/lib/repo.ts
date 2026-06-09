@@ -123,6 +123,12 @@ export async function writeSignals(rows: StockSignal[]): Promise<void> {
     'data_date,stock_id');
 }
 
+/** 讀某交易日的全部訊號列（分頁，避免 1000 列上限截斷全市場快照）。 */
+export async function readSignalsByDate(dataDate: string): Promise<Record<string, unknown>[]> {
+  return selectAllPaged<Record<string, unknown>>(() =>
+    getSupabase().from('daily_stock_signals').select('*').eq('data_date', dataDate));
+}
+
 /** 最新「成功/部分成功」快照的資料日期（無則 null）。 */
 export async function latestSnapshotDate(): Promise<string | null> {
   const db = getSupabase();
