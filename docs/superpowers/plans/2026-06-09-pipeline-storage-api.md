@@ -8,6 +8,8 @@
 
 **Tech Stack:** Next.js（App Router）＋ TypeScript ＋ `@supabase/supabase-js` ＋ vitest ＋ Vercel Cron。沿用計畫 1 的 `web/lib/types.ts`、`signals.ts`。
 
+> **⚠️ 實作異動（執行後更新）：** Task 2 規劃以 FinMind 抓股價＋法人，但實測 FinMind **免費 tier 擋全市場查詢**（單檔可、全市場 400「level is register」）。已改用**免費 TWSE/TPEx 政府 by-date 端點**（`web/lib/marketdata.ts`，取代 `finmind.ts`/`finmind-normalize.ts`，介面不變）。其餘任務（schema、director ingest、repo、signal-builder、pipeline、API、cron）依本計畫實作並已用真實資料整合驗證通過（單日約 2,260 檔、預設參數選出約 131 檔）。另：首次回補 ~75 交易日約 10 分鐘，超過 Vercel 300 秒上限，故**首次在本機 seed**、Cron 只做每日增量（見 `web/README.md`）。
+
 ---
 
 ## 前置與環境
