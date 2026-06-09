@@ -17,7 +17,7 @@
 1. 對 ≥ 5 檔樣本（混合上市/上櫃，且至少 1 檔已知高董監持股）能取得 `director_holding_pct ∈ [0, 100]`。
 2. **更新頻率為每月、且資料為近月**：上市與上櫃所選來源的 `資料年月` 皆為最近一期（距今 ≤ 2 個月），且來源宣告之更新頻率為每月。⚠️ 政府開放資料集的更新頻率須逐一確認——已知部分上櫃董監明細資料集標示「每1年」；若某市場來源僅為年更，**該市場必須改用每月來源**（見 Task 6 的 MOPS 路徑）才算通過。
 3. 其中 ≥ 2 檔的數值，與公開資訊觀測站網頁顯示的全體董監持股比率人工核對誤差 ≤ 0.5 個百分點，**且比較的是同一個 `資料年月`**。
-4. 能對全市場（上市＋上櫃）列舉並估算涵蓋率，目標 ≥ 95% 的股票可取得數值。
+4. 能對全市場（上市＋上櫃）**列舉**涵蓋率（datagov 以明細全量列舉、MOPS 以全量逐檔查詢，皆為普查非抽樣），≥ 95% 的股票可取得數值；唯有在 MOPS 被封鎖/限流而無法全量時，才退回大樣本並以**信賴下界 ≥ 95%** 為準。
 5. `FINDINGS.md` 明確記載：選定來源、**確切端點/參數/欄位**、各市場更新頻率與最新可得月份、**發行股數欄位來源**、彙總方法，以此關閉主設計 §11。
 
 **POC 失敗（no-go，需回頭調整設計）：** 無任何免費來源能產出每檔 %，或涵蓋率過低。失敗時於 `FINDINGS.md` 記錄已嘗試來源與失敗原因，並提出替代方向。
@@ -39,12 +39,13 @@ poc/director-holdings/
 │   ├── sources/
 │   │   ├── datagov.ts      # 候選 A：data.gov.tw 董監明細解析
 │   │   └── mops.ts         # 候選 B：MOPS 全體董監持股比率解析 / 交叉驗證
+│   ├── coverage_mops.ts    # 上櫃走 MOPS 時的全量涵蓋率普查（節流＋快取）
 │   └── run.ts              # CLI：抓樣本、彙總、輸出 CSV
 ├── test/
 │   ├── aggregate.test.ts
 │   └── datagov.test.ts
-├── fixtures/               # 抓回來的原始樣本（供解析測試）
-├── out/                    # 產出的 sample CSV
+├── fixtures/               # 抓回來的原始樣本（供解析測試；mops-<id>-<月>.html）
+├── out/                    # 產出的 sample CSV、basic raw、mops-coverage/ 快取（gitignore）
 └── FINDINGS.md             # 交付物：go/no-go 與來源結論
 ```
 
@@ -685,9 +686,53 @@ for (const f of ['fixtures/datagov-listed.csv']) {
 "
 ```
 
-**採 MOPS 的市場（上櫃年更時）**：MOPS 為逐檔查詢、無法一次列舉，改以**抽樣估計**——隨機抽 20 檔上櫃股，以 Task 6 的 MOPS 路徑查詢，記錄成功取得比率的比例作為涵蓋率估計，於 FINDINGS 標注為「抽樣估計」。
+**採 MOPS 的市場（上櫃年更時）**：MOPS 為逐檔查詢，但「≥95% 涵蓋率」是 GO 判準，**隨機 20 檔無法證明全市場覆蓋**。改為**全量逐檔列舉**（普查），加節流與快取，POC 一次性是可行的：
 
-對照各市場基本資料（`out/twse-basic.raw` / `out/tpex-basic.raw`）的總檔數計算比例，記錄到 FINDINGS。目標 ≥ 95%。
+新增 `src/coverage_mops.ts`：
+
+```ts
+// src/coverage_mops.ts
+// 用法：ROC_YEAR=115 MONTH=05 npx tsx src/coverage_mops.ts
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { fetchText } from './http';
+import { parseMopsRatio } from './sources/mops';
+
+const ROC_YEAR = Number(process.env.ROC_YEAR);   // 例 115（= 西元 2026）
+const MONTH = process.env.MONTH;                  // 例 '05'，對齊 DATA_MONTH
+if (!ROC_YEAR || !MONTH) throw new Error('需 ROC_YEAR 與 MONTH，對齊 DATA_MONTH');
+
+const basic = JSON.parse(readFileSync(new URL('../out/tpex-basic.raw', import.meta.url), 'utf8'));
+const ids: string[] = [...new Set(basic.map((x: any) => String(x['公司代號']).trim()).filter(Boolean))];
+
+const cacheDir = new URL('../out/mops-coverage/', import.meta.url); // out/ 已 gitignore，避免上百檔進版控
+mkdirSync(cacheDir, { recursive: true });
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+let ok = 0, fail = 0;
+for (let i = 0; i < ids.length; i++) {
+  const id = ids[i];
+  const cache = new URL(`./${id}.html`, cacheDir);
+  let html: string;
+  if (existsSync(cache)) {
+    html = readFileSync(cache, 'utf8');               // 已快取 → 續跑、不重打 MOPS
+  } else {
+    const body = `co_id=${id}&year=${ROC_YEAR}&month=${MONTH}&step=1&firstin=1`;
+    html = (await fetchText('https://mops.twse.com.tw/mops/web/ajax_stapap1', { method: 'POST', body })).text;
+    writeFileSync(cache, html);
+    await sleep(400);                                 // 節流，禮貌存取
+  }
+  try { parseMopsRatio(html); ok++; } catch { fail++; }
+  if ((i + 1) % 50 === 0) console.log(`${i + 1}/${ids.length} ok=${ok} fail=${fail}`);
+}
+console.log(`MOPS 上櫃涵蓋率 = ${ok}/${ids.length} = ${((ok / ids.length) * 100).toFixed(1)}%`);
+```
+
+Run: `cd poc/director-holdings && ROC_YEAR=115 MONTH=05 npx tsx src/coverage_mops.ts`
+Expected: 跑完全部上櫃代號（節流下約數分鐘，可中斷續跑），印出**實際**涵蓋率。GO 要求 ≥ 95%。
+
+> **封鎖/限流時的退路**：若 MOPS 擋下無法全量，改取**確定性大樣本**（每第 4 檔，約 200 檔），以 Wilson 95% 下界 `p̂ - 1.96·√(p̂(1-p̂)/n)`（粗略）判定，要求**下界 ≥ 95%**，並於 FINDINGS 標注為抽樣估計與樣本數。
+
+對照各市場基本資料總檔數計算比例，記錄到 FINDINGS。目標 ≥ 95%。
 
 - [ ] **Step 3: 寫 `FINDINGS.md`**
 
@@ -720,10 +765,10 @@ for (const f of ['fixtures/datagov-listed.csv']) {
 | 2330 | 上市 | <…> | <…> | <…> |
 | 6488 | 上櫃 | <…> | <…> | <…> |
 
-## 涵蓋率
-- 明細涵蓋不重複代號數：<…>
-- 上市＋上櫃總檔數：<…>
-- 涵蓋率：<…>%
+## 涵蓋率（普查，非抽樣）
+- 上市：方法＝<datagov 明細列舉>、可取得 / 總檔數＝<…>/<…>＝<…>%
+- 上櫃：方法＝<datagov 明細列舉 / MOPS 全量逐檔普查>、可取得 / 總檔數＝<…>/<…>＝<…>%
+- 若上櫃因封鎖改抽樣：樣本數 n＝<…>、點估計＝<…>%、Wilson 95% 下界＝<…>%（GO 需下界 ≥ 95%）
 
 ## 風險 / 注意
 - 已發行股數欄位的特例（TDR 原股、特別股、私募股）：<是否需含特別股、處理方式>
