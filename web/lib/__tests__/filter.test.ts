@@ -1,6 +1,6 @@
 // web/lib/__tests__/filter.test.ts
 import { describe, it, expect } from 'vitest';
-import { matchesA, matchesB, reasonsForA, reasonsForB } from '../filter';
+import { matchesA, matchesB, reasonsForA, reasonsForB, runFilter, manualSort } from '../filter';
 import type { StockSignal } from '../types';
 
 function sig(overrides: Partial<StockSignal>): StockSignal {
@@ -92,5 +92,55 @@ describe('reasonsForB（月線型）', () => {
     const r = reasonsForB(sig({ distMa20Ratio: 0.05 }), { n: 2, x: 15 });
     expect(r[2]).toContain('月線上方');
     expect(r[3]).toContain('月線');
+  });
+});
+
+// 追加到 web/lib/__tests__/filter.test.ts
+
+describe('runFilter 標籤與統計', () => {
+  it('依符合度標 A / B / A+B，並只收 matchA||matchB', () => {
+    const aOnly = sig({ stockId: 'A1', distMa20Ratio: 0.5 });
+    const bOnly = sig({ stockId: 'B1', distMa60Ratio: 0.5 });
+    const both = sig({ stockId: 'AB1' });
+    const none = sig({ stockId: 'N1', instBuyStreak: 0 });
+    const { rows, summary } = runFilter([aOnly, bOnly, both, none], { n: 2, x: 15 });
+    const byId = Object.fromEntries(rows.map((r) => [r.signal.stockId, r.tag]));
+    expect(byId['A1']).toBe('A');
+    expect(byId['B1']).toBe('B');
+    expect(byId['AB1']).toBe('A+B');
+    expect('N1' in byId).toBe(false);
+    expect(summary).toEqual({ total: 3, countA: 2, countB: 2, countAB: 1 });
+  });
+
+  it('綜合排序：A+B 優先，其次連買天數多', () => {
+    const ab = sig({ stockId: 'AB', instBuyStreak: 3 });
+    const aHi = sig({ stockId: 'AHI', distMa20Ratio: 0.5, instBuyStreak: 9 });
+    const aLo = sig({ stockId: 'ALO', distMa20Ratio: 0.5, instBuyStreak: 4 });
+    const { rows } = runFilter([aLo, aHi, ab], { n: 2, x: 15 });
+    expect(rows.map((r) => r.signal.stockId)).toEqual(['AB', 'AHI', 'ALO']);
+  });
+
+  it('rows 帶 reasonsA/reasonsB（依符合的條件）', () => {
+    const both = sig({ stockId: 'AB1' });
+    const { rows } = runFilter([both], { n: 2, x: 15 });
+    expect(rows[0].reasonsA.length).toBe(4);
+    expect(rows[0].reasonsB.length).toBe(4);
+  });
+});
+
+describe('manualSort', () => {
+  const rows = () => runFilter([
+    sig({ stockId: 'X', instBuyStreak: 2, volumeLots: 300, directorHoldingPct: 16 }),
+    sig({ stockId: 'Y', instBuyStreak: 8, volumeLots: 100, directorHoldingPct: 40 }),
+  ], { n: 2, x: 15 }).rows;
+
+  it('依連買天數遞減', () => {
+    expect(manualSort(rows(), 'streak', 'desc').map((r) => r.signal.stockId)).toEqual(['Y', 'X']);
+  });
+  it('依成交量遞減', () => {
+    expect(manualSort(rows(), 'volume', 'desc').map((r) => r.signal.stockId)).toEqual(['X', 'Y']);
+  });
+  it('依董監持股遞增', () => {
+    expect(manualSort(rows(), 'director', 'asc').map((r) => r.signal.stockId)).toEqual(['X', 'Y']);
   });
 });
