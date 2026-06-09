@@ -1,6 +1,6 @@
 // web/lib/__tests__/filter.test.ts
 import { describe, it, expect } from 'vitest';
-import { matchesA, matchesB } from '../filter';
+import { matchesA, matchesB, reasonsForA, reasonsForB } from '../filter';
 import type { StockSignal } from '../types';
 
 function sig(overrides: Partial<StockSignal>): StockSignal {
@@ -58,5 +58,39 @@ describe('matchesB（條件 B 月線型，用 20MA）', () => {
   });
   it('不具 B 資格 → false', () => {
     expect(matchesB(sig({ eligibleB: false }), { n: 2, x: 15 })).toBe(false);
+  });
+});
+
+// 追加到 web/lib/__tests__/filter.test.ts
+
+describe('reasonsForA（季線型入選原因）', () => {
+  it('涵蓋連買、董監、距季線、季線狀態四條', () => {
+    const r = reasonsForA(sig({ instBuyStreak: 5, directorHoldingPct: 18.2, distMa60Ratio: 0.021 }), { n: 2, x: 15 });
+    expect(r).toHaveLength(4);
+    expect(r[0]).toContain('連買');
+    expect(r[0]).toContain('5');
+    expect(r[1]).toContain('董監持股');
+    expect(r[1]).toContain('18.2');
+    expect(r[2]).toContain('季線上方');
+    expect(r[2]).toContain('2.1');
+    expect(r[3]).toContain('季線');
+  });
+
+  it('季線已上彎時用「已上彎」字樣', () => {
+    const r = reasonsForA(sig({ ma60: 98, ma60Prev: 97, ma60Holdflat5d: 97.5 }), { n: 2, x: 15 });
+    expect(r[3]).toContain('已上彎');
+  });
+
+  it('季線未上彎但扣抵向上時用「扣抵向上」字樣', () => {
+    const r = reasonsForA(sig({ ma60: 98, ma60Prev: 99, ma60Holdflat5d: 98.5 }), { n: 2, x: 15 });
+    expect(r[3]).toContain('扣抵');
+  });
+});
+
+describe('reasonsForB（月線型）', () => {
+  it('用「月線」字樣與 20MA 距離', () => {
+    const r = reasonsForB(sig({ distMa20Ratio: 0.05 }), { n: 2, x: 15 });
+    expect(r[2]).toContain('月線上方');
+    expect(r[3]).toContain('月線');
   });
 });
