@@ -31,11 +31,29 @@ export function parseDirectorRows(csv: string, stockId: string): DirectorRow[] {
   const kName = findKey(keys, COL.name);
   const kShares = findKey(keys, COL.shares);
 
-  return records
+  // t187ap11 lists ALL insiders (經理人、大股東、財務/會計主管 etc.), not only directors.
+  // Rules to match MOPS 全體董監持股合計:
+  //   1. Keep only 董事/監察人 本人 rows (title contains 董事 or 監察人, excludes 法人代表人).
+  //   2. Dedupe by 姓名: a corporate director holding multiple seats repeats its full
+  //      holding on each row — count that entity only once (keep max shares).
+  const isDirectorOrSupervisor = (title: string) =>
+    (title.includes('董事') || title.includes('監察人')) && !title.includes('法人代表');
+
+  const filtered = records
     .filter((r) => String(r[kId]).trim() === stockId)
-    .map((r) => ({
-      title: r[kTitle],
-      name: r[kName],
-      currentShares: Number(String(r[kShares]).replace(/,/g, '')) || 0,
-    }));
+    .filter((r) => isDirectorOrSupervisor(r[kTitle]));
+
+  // Dedupe by name, keeping max currentShares (repeated rows for same entity are identical
+  // in practice, but we take max to be safe).
+  const byName = new Map<string, { title: string; name: string; currentShares: number }>();
+  for (const r of filtered) {
+    const name = r[kName];
+    const shares = Number(String(r[kShares]).replace(/,/g, '')) || 0;
+    const existing = byName.get(name);
+    if (!existing || shares > existing.currentShares) {
+      byName.set(name, { title: r[kTitle], name, currentShares: shares });
+    }
+  }
+
+  return Array.from(byName.values());
 }
