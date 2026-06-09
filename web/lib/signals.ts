@@ -18,9 +18,8 @@ export function holdflat(closes: number[], window: number, simDays = 5): number 
   const today = closes[closes.length - 1];
   const keep = window - simDays;
   let sum = simDays * today;
-  const keepEnd = closes.length - 1; // exclude today
-  const keepStart = keepEnd - keep;
-  for (let i = keepStart; i < keepEnd; i++) sum += closes[i];
+  // 取「最後 keep 筆（含今日）」：5 日後的視窗 = c[t-(keep-1)..t] + 5 筆模擬今日收盤。
+  for (let i = closes.length - keep; i < closes.length; i++) sum += closes[i];
   return sum / window;
 }
 
