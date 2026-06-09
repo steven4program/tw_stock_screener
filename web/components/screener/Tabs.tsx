@@ -12,9 +12,9 @@ export function Tabs({ tab, onTab, summary }: {
     ['AB', 'A+B 同時符合', summary.countAB],
   ];
   return (
-    <div className="tabs" role="tablist" aria-label="分類">
+    <div className="tabs" role="group" aria-label="分類">
       {items.map(([k, label, c]) => (
-        <button key={k} role="tab" aria-selected={tab === k} className="tab" onClick={() => onTab(k)}>
+        <button key={k} aria-pressed={tab === k} className="tab" onClick={() => onTab(k)}>
           {label}<span className="t-count num">{c}</span>
         </button>
       ))}

@@ -256,7 +256,7 @@ body {
   transition: background .12s, border-color .12s, color .12s;
 }
 .tab:hover { border-color: var(--border-strong); }
-.tab[aria-selected="true"] {
+.tab[aria-pressed="true"] {
   background: var(--accent); border-color: var(--accent); color: #fff;
 }
 .tab .t-count {
@@ -264,7 +264,7 @@ body {
   background: var(--surface-3); color: var(--ink-2);
   border-radius: var(--radius-pill); padding: 1px 9px;
 }
-.tab[aria-selected="true"] .t-count { background: rgba(255,255,255,.25); color: #fff; }
+.tab[aria-pressed="true"] .t-count { background: rgba(255,255,255,.25); color: #fff; }
 
 /* =========================================================================
    排序控制

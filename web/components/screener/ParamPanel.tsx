@@ -14,12 +14,12 @@ export function ParamPanel({ n, x, onN, onX, dataDate }: {
       <div className="param-grid">
         <div className="param">
           <div className="p-name">法人連買天數 <b>N</b></div>
-          <Stepper value={n} min={1} max={10} unit="天" onChange={onN} />
+          <Stepper value={n} min={1} max={10} unit="天" label="法人連買天數" onChange={onN} />
           <div className="p-range">可調範圍 1–10　預設 2</div>
         </div>
         <div className="param">
           <div className="p-name">董監持股門檻 <b>X</b></div>
-          <Stepper value={x} min={5} max={50} unit="%" onChange={onX} />
+          <Stepper value={x} min={5} max={50} unit="%" label="董監持股門檻" onChange={onX} />
           <div className="p-range">可調範圍 5–50　預設 15</div>
         </div>
       </div>
