@@ -33,6 +33,8 @@ export async function upsertDirectors(rows: DirectorHolding[]): Promise<void> {
 
 // ⚠️ PostgREST/Supabase 單次 select 預設最多回 1000 列。全市場視窗（~1800×70 ≈ 12.6 萬列）
 // 必須分頁，否則會「靜默只拿到 1000 列」。以 range 迴圈分頁取全部。
+// build 為 Supabase query builder thunk；缺產生型別時精準標註過於脆弱，故保留 any。
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function selectAllPaged<T>(build: () => any): Promise<T[]> {
   const PAGE = 1000;
   const out: T[] = [];
