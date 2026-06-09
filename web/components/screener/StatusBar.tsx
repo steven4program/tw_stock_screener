@@ -13,7 +13,8 @@ export function StatusBar({ scenario, dataDate, lastSuccessDate, directorDataMon
   } else if (scenario === 'failed') {
     tone = 'bad'; ico = '⛔'; main = `更新失敗（顯示為上次成功資料 ${lastSuccessDate}）`;
   } else if (scenario === 'partial') {
-    main = `今日已更新 ・ 資料日期 ${dataDate}`; sub = `⚠️ 董監資料沿用 ${directorDataMonthLatest} 月份`;
+    main = `今日已更新 ・ 資料日期 ${dataDate}`;
+    sub = directorDataMonthLatest ? `⚠️ 董監資料沿用 ${directorDataMonthLatest} 月份` : '⚠️ 董監資料暫缺';
   } else {
     main = `今日已更新 ・ 資料日期 ${dataDate}`;
   }

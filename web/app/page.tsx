@@ -15,7 +15,7 @@ export default async function Page() {
   const skin = normalizeSkin((await cookies()).get(SKIN_COOKIE)?.value);
 
   return (
-    <div className="app">
+    <main className="app">
       <div className="app-title">
         <PageTitle />
         <SkinSwitcher current={skin} />
@@ -36,6 +36,6 @@ export default async function Page() {
           <Footer />
         </>
       )}
-    </div>
+    </main>
   );
 }

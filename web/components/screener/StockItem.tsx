@@ -54,14 +54,14 @@ export function StockItem({ row, tab, expanded, onToggle, directorDataMonthLates
         <DirectorCell sig={s} directorDataMonthLatest={directorDataMonthLatest} />
 
         <div className="cell action m-cell">
-          <button className="reason-btn" aria-expanded={expanded} onClick={onToggle}>
+          <button className="reason-btn" aria-expanded={expanded} aria-controls={`reasons-${s.stockId}`} onClick={onToggle}>
             {expanded ? '收合' : '看原因'} <span className="chev" aria-hidden="true">▾</span>
           </button>
         </div>
       </div>
 
       {expanded && (
-        <div className={'reasons' + (groups.length > 1 ? ' two' : '')}>
+        <div id={`reasons-${s.stockId}`} className={'reasons' + (groups.length > 1 ? ' two' : '')}>
           {groups.map((k) => (
             <ReasonGroup key={k} kind={k} sig={s} reasons={k === 'A' ? row.reasonsA : row.reasonsB} />
           ))}

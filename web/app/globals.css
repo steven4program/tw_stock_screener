@@ -455,3 +455,9 @@ body {
 .no-data .nd-ico { font-size: 48px; }
 .no-data .nd-title { font-size: var(--fs-title); font-weight: 800; color: var(--ink); margin-top: var(--sp-3); }
 .no-data .nd-sub { font-size: var(--fs-body); color: var(--ink-2); margin-top: 8px; }
+
+/* =========================================================================
+   鍵盤焦點指示（WCAG 2.1 AA — 2.4.7 Focus Visible）
+   設計稿未含 focus 樣式；自訂控件會蓋掉瀏覽器預設外框，故補上清楚的焦點環。
+   ========================================================================= */
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
