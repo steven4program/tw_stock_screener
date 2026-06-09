@@ -166,10 +166,20 @@ function parseTpexPriceNames(json: unknown): Map<string, string> {
 
 // ── network wrappers ──────────────────────────────────────────────────────
 
-async function getJson(url: string): Promise<unknown> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`市場資料請求失敗 ${res.status}：${url}`);
-  return res.json();
+/** 抓 JSON，含逾時與重試退避。TWSE/TPEx 網站後端常間歇性斷線（undici terminated）。 */
+async function getJson(url: string, attempts = 4): Promise<unknown> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+      if (!res.ok) throw new Error(`市場資料請求失敗 ${res.status}：${url}`);
+      return await res.json();
+    } catch (e) {
+      lastErr = e;
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, 600 * (i + 1)));
+    }
+  }
+  throw new Error(`市場資料重試 ${attempts} 次仍失敗：${url}\n${(lastErr as Error)?.message ?? lastErr}`);
 }
 
 const TWSE_MIINDEX = (twseDate: string) =>
