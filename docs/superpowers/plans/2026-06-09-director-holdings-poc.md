@@ -77,7 +77,8 @@ poc/director-holdings/
     "vitest": "^2.1.8"
   },
   "dependencies": {
-    "cheerio": "^1.0.0"
+    "cheerio": "^1.0.0",
+    "csv-parse": "^5.6.0"
   }
 }
 ```
@@ -261,7 +262,8 @@ export async function fetchText(
   return { status: res.status, contentType: res.headers.get('content-type') ?? '', text: await res.text() };
 }
 
-/** 防呆：擋下把錯誤頁/HTML 當成資料存檔（data.gov.tw 轉址至 mopsfin 可能回傳安全性錯誤頁）。 */
+/** 防呆：擋下把錯誤頁/HTML 當成資料存檔（data.gov.tw 轉址至 mopsfin 可能回傳安全性錯誤頁）。
+ *  CSV/JSON 來源應套用；MOPS 本身回傳 HTML，須以 ALLOW_HTML=1 放行（錯誤頁改由解析器偵測）。 */
 export function assertNotHtml(text: string, url: string): void {
   const head = text.slice(0, 500).toLowerCase();
   if (head.includes('<html') || head.includes('<!doctype html')) {
@@ -269,13 +271,13 @@ export function assertNotHtml(text: string, url: string): void {
   }
 }
 
-// 直接從命令列執行：抓一個 URL 存成 fixture（自動建立目錄、擋 HTML 錯誤頁）
+// 直接從命令列執行：抓一個 URL 存成 fixture（自動建立目錄；預設擋 HTML 錯誤頁，ALLOW_HTML=1 放行）
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [url, out, method, body] = process.argv.slice(2);
   const { status, contentType, text } = await fetchText(url, { method, body });
   console.log('HTTP', status, 'content-type', contentType, 'bytes', text.length);
   if (out) {
-    assertNotHtml(text, url);
+    if (!process.env.ALLOW_HTML) assertNotHtml(text, url);
     await mkdir(dirname(out), { recursive: true });
     await writeFile(out, text);
     console.log('saved to', out);
@@ -407,45 +409,46 @@ Expected: FAIL（`parseDirectorRows` 尚未定義）。
 
 ```ts
 // src/sources/datagov.ts
+import { parse } from 'csv-parse/sync';
 import type { DirectorRow } from '../types';
 
+// 各欄位的候選名稱（依 Task 4 Step 3 實測表頭調整）
 const COL = {
-  stockId: ['公司代號', '公司代號 ', '代號'],
+  stockId: ['公司代號', '代號'],
   title: ['職稱'],
   name: ['姓名'],
   shares: ['目前持股', '持股（股數）', '持股(股數)', '目前持股(股)'],
 };
 
-function pick(header: string[], aliases: string[]): number {
-  const idx = header.findIndex((h) => aliases.includes(h.trim()));
-  if (idx < 0) throw new Error(`找不到欄位，候選名稱：${aliases.join('/')}；實際表頭：${header.join(',')}`);
-  return idx;
-}
-
-function splitCsvLine(line: string): string[] {
-  // 簡易 CSV 切分（董監明細無內嵌逗號的引號欄位；若有，於 FINDINGS 記錄並改用正式 CSV parser）
-  return line.split(',').map((c) => c.replace(/^"|"$/g, '').trim());
+function findKey(keys: string[], aliases: string[]): string {
+  const k = keys.find((key) => aliases.includes(key.trim()));
+  if (!k) throw new Error(`找不到欄位，候選名稱：${aliases.join('/')}；實際表頭：${keys.join(',')}`);
+  return k;
 }
 
 export function parseDirectorRows(csv: string, stockId: string): DirectorRow[] {
-  const lines = csv.split(/\r?\n/).filter((l) => l.trim().length > 0);
-  const header = splitCsvLine(lines[0]);
-  const iId = pick(header, COL.stockId);
-  const iTitle = pick(header, COL.title);
-  const iName = pick(header, COL.name);
-  const iShares = pick(header, COL.shares);
+  // 用正式 CSV parser：正確處理千分位引號欄位（如 "10,000,000"）、BOM、不定欄數
+  const records: Record<string, string>[] = parse(csv, {
+    columns: true,
+    skip_empty_lines: true,
+    relax_column_count: true,
+    bom: true,
+    trim: true,
+  });
+  if (records.length === 0) return [];
+  const keys = Object.keys(records[0]);
+  const kId = findKey(keys, COL.stockId);
+  const kTitle = findKey(keys, COL.title);
+  const kName = findKey(keys, COL.name);
+  const kShares = findKey(keys, COL.shares);
 
-  const out: DirectorRow[] = [];
-  for (const line of lines.slice(1)) {
-    const cells = splitCsvLine(line);
-    if (cells[iId] !== stockId) continue;
-    out.push({
-      title: cells[iTitle],
-      name: cells[iName],
-      currentShares: Number(cells[iShares].replace(/,/g, '')) || 0,
-    });
-  }
-  return out;
+  return records
+    .filter((r) => String(r[kId]).trim() === stockId)
+    .map((r) => ({
+      title: r[kTitle],
+      name: r[kName],
+      currentShares: Number(String(r[kShares]).replace(/,/g, '')) || 0,
+    }));
 }
 ```
 
@@ -501,9 +504,44 @@ git commit -m "feat(poc): parse data.gov.tw director rows + aggregate %"
 
 把 Task 5/7 算出的 % 與本任務官方比率相減，確認 ≤ 0.5 個百分點。**若兩者資料年月不同，視為無效比較**，需取相同月份重做。記錄差異與所用月份。
 
-- [ ] **Step 3: 上櫃每月來源備援（若 data.gov 上櫃為年更，則此為必做）**
+- [ ] **Step 3: 上櫃每月來源備援（若 data.gov 上櫃為年更/不新鮮，則此為必做）**
 
-當 Task 4 判定上櫃 data.gov 明細為「每1年」或新鮮度不足時，上櫃**改用 MOPS 每月**：以 `src/sources/mops.ts` 程式化抓取。候選端點（待驗證）：`POST https://mops.twse.com.tw/mops/web/ajax_stapap1`，表單參數含 `co_id=<代號>`、`year=<民國年, 2026→115>`、`month=<MM>`、`step=1`、`firstin=1`。用 `src/http.ts`（會自動擋 HTML 錯誤頁）抓回回應存 fixture，以 cheerio 解析「全體董監持股比率」儲存格，並補一個對該 fixture 的解析測試（比照 Task 5 的 TDD 流程）。若 MOPS 直接提供比率，彙總用 `aggregateByRatios`，省去發行股數。
+當 Task 4 判定上櫃 data.gov 明細為「每1年」或新鮮度不足時，上櫃**改用 MOPS 每月**。若上櫃 data.gov 為每月且新鮮，**跳過本步**、上櫃維持 datagov。
+
+**(a) 抓 MOPS 回應（HTML，需放行）** — 候選端點（待驗證）`POST https://mops.twse.com.tw/mops/web/ajax_stapap1`，參數 `co_id=<代號>`、`year=<民國年,2026→115>`、`month=<MM，對齊 DATA_MONTH>`、`step=1`、`firstin=1`。每檔上櫃樣本各抓一次（`ALLOW_HTML=1` 放行 HTML 存檔）：
+
+Run（以 6488、month 對齊 fixture 月份為例）:
+`cd poc/director-holdings && ALLOW_HTML=1 npx tsx src/http.ts "https://mops.twse.com.tw/mops/web/ajax_stapap1" "fixtures/mops-6488-2026-05.html" POST "co_id=6488&year=115&month=05&step=1&firstin=1"`
+
+**(b) 寫 `src/sources/mops.ts`**：
+
+```ts
+// src/sources/mops.ts
+import * as cheerio from 'cheerio';
+
+/** 從 MOPS 董監持股明細 HTML 取「全體董監事持股」比率(%)。
+ *  找不到比率儲存格即 throw —— 同時擋下 MOPS 錯誤頁/查無資料頁，避免假成功。 */
+export function parseMopsRatio(html: string): number {
+  const $ = cheerio.load(html);
+  // 找含「全體董監事持股」字樣的列，取其百分比數值（選擇器依實際 HTML 結構於本步調整）
+  let pct = NaN;
+  $('tr').each((_, tr) => {
+    const txt = $(tr).text().replace(/\s+/g, '');
+    if (txt.includes('全體董監事') && txt.includes('持股')) {
+      const m = txt.match(/(\d+(?:\.\d+)?)%/);
+      if (m) pct = Number(m[1]);
+    }
+  });
+  if (!(pct >= 0 && pct <= 100)) {
+    throw new Error('MOPS 回應找不到全體董監持股比率（可能為錯誤頁/查無資料）');
+  }
+  return pct;
+}
+```
+
+**(c) 補解析測試**（比照 Task 5 TDD）：用 `fixtures/mops-6488-2026-05.html` 斷言 `parseMopsRatio` 回傳 ∈ (0,100]。
+
+**(d) 切換來源**：在 `src/run.ts` 將 `MARKET_SOURCE.TPEx` 設為 `'mops'`，runner 即走比率路徑（`aggregateByRatios` 概念，省去發行股數）。
 
 - [ ] **Step 4: Commit（如有產生檔案）**
 
@@ -528,7 +566,8 @@ import { parseDirectorRows } from './sources/datagov';
 import { aggregateByShares } from './aggregate';
 import type { DirectorHoldingResult } from './types';
 
-const SAMPLES: { id: string; name: string; market: 'TWSE' | 'TPEx' }[] = [
+type Market = 'TWSE' | 'TPEx';
+const SAMPLES: { id: string; name: string; market: Market }[] = [
   { id: '2330', name: '台積電', market: 'TWSE' },
   { id: '2317', name: '鴻海', market: 'TWSE' },
   { id: '9921', name: '巨大', market: 'TWSE' },
@@ -536,17 +575,22 @@ const SAMPLES: { id: string; name: string; market: 'TWSE' | 'TPEx' }[] = [
   { id: '6488', name: '環球晶', market: 'TPEx' },
 ];
 
-const DATA_MONTH = process.env.DATA_MONTH ?? '';  // 由 Task 4 記錄的 fixture 資料年月填入，例 '2026-05'
+const DATA_MONTH = process.env.DATA_MONTH ?? '';  // 對齊 Task 4 記錄的 fixture 資料年月，例 '2026-05'
 if (!DATA_MONTH) throw new Error('請以 DATA_MONTH=YYYY-MM 執行，對齊 fixture 的資料年月');
 
+// 由 Task 4–6 結論決定每個市場的來源：datagov(明細→加總股數) 或 mops(直接比率)
+const MARKET_SOURCE: Record<Market, 'datagov' | 'mops'> = {
+  TWSE: 'datagov',
+  TPEx: 'datagov', // ← 若 Task 4 判定上櫃 data.gov 為年更/不新鮮，改成 'mops'
+};
+
 // 已發行股數欄位名（依 Task 3 實測記錄調整；上市/上櫃可能不同）
-const SHARES_COL: Record<'TWSE' | 'TPEx', string> = {
+const SHARES_COL: Record<Market, string> = {
   TWSE: '已發行普通股數或TDR原股發行股數',
   TPEx: '<TPEX_SHARES_COL>', // ← 換成 out/tpex-basic.raw 的實際欄位名
 };
 
-/** 直接使用基本資料的「已發行股數」欄位；缺值即丟錯，避免假成功。 */
-function outstandingShares(basic: any[], id: string, market: 'TWSE' | 'TPEx'): number {
+function outstandingShares(basic: any[], id: string, market: Market): number {
   const co = basic.find((x) => String(x['公司代號']).trim() === id);
   if (!co) throw new Error(`${market} 基本資料缺 ${id}`);
   const shares = Number(String(co[SHARES_COL[market]] ?? '').replace(/,/g, ''));
@@ -554,29 +598,45 @@ function outstandingShares(basic: any[], id: string, market: 'TWSE' | 'TPEx'): n
   return shares;
 }
 
-const listedCsv = readFileSync(new URL('../fixtures/datagov-listed.csv', import.meta.url), 'utf8');
-const otcCsv = readFileSync(new URL('../fixtures/datagov-otc.csv', import.meta.url), 'utf8');
-const twseBasic = JSON.parse(readFileSync(new URL('../out/twse-basic.raw', import.meta.url), 'utf8'));
-const tpexBasic = JSON.parse(readFileSync(new URL('../out/tpex-basic.raw', import.meta.url), 'utf8'));
-
-const results: DirectorHoldingResult[] = [];
-for (const s of SAMPLES) {
-  const csv = s.market === 'TWSE' ? listedCsv : otcCsv;
-  const basic = s.market === 'TWSE' ? twseBasic : tpexBasic;
-  const rows = parseDirectorRows(csv, s.id);
-  if (rows.length === 0) throw new Error(`${s.market} ${s.id} 明細無董監列，請確認 fixture 與代號`);
-  const pct = aggregateByShares(rows, outstandingShares(basic, s.id, s.market)); // 缺股數會 throw，不產生 NaN
-  results.push({
-    stockId: s.id, stockName: s.name, market: s.market,
-    dataMonth: DATA_MONTH, directorHoldingPct: Number(pct.toFixed(2)), method: 'shares',
-  });
+// 僅載入「採 datagov 的市場」所需的明細與基本資料
+const datagovCsv: Partial<Record<Market, string>> = {};
+const datagovBasic: Partial<Record<Market, any[]>> = {};
+if (MARKET_SOURCE.TWSE === 'datagov') {
+  datagovCsv.TWSE = readFileSync(new URL('../fixtures/datagov-listed.csv', import.meta.url), 'utf8');
+  datagovBasic.TWSE = JSON.parse(readFileSync(new URL('../out/twse-basic.raw', import.meta.url), 'utf8'));
 }
+if (MARKET_SOURCE.TPEx === 'datagov') {
+  datagovCsv.TPEx = readFileSync(new URL('../fixtures/datagov-otc.csv', import.meta.url), 'utf8');
+  datagovBasic.TPEx = JSON.parse(readFileSync(new URL('../out/tpex-basic.raw', import.meta.url), 'utf8'));
+}
+
+async function holdingPct(s: { id: string; market: Market }): Promise<{ pct: number; method: 'shares' | 'ratio' }> {
+  if (MARKET_SOURCE[s.market] === 'datagov') {
+    const rows = parseDirectorRows(datagovCsv[s.market]!, s.id);
+    if (rows.length === 0) throw new Error(`${s.market} ${s.id} datagov 明細無董監列`);
+    return { pct: aggregateByShares(rows, outstandingShares(datagovBasic[s.market]!, s.id, s.market)), method: 'shares' };
+  }
+  // mops 路徑：動態載入（未採 mops 時不需該模組）；直接取全體董監比率
+  const { parseMopsRatio } = await import('./sources/mops');
+  const html = readFileSync(new URL(`../fixtures/mops-${s.id}-${DATA_MONTH}.html`, import.meta.url), 'utf8');
+  return { pct: parseMopsRatio(html), method: 'ratio' };
+}
+
+const results: DirectorHoldingResult[] = await Promise.all(
+  SAMPLES.map(async (s) => {
+    const { pct, method } = await holdingPct(s);
+    return {
+      stockId: s.id, stockName: s.name, market: s.market,
+      dataMonth: DATA_MONTH, directorHoldingPct: Number(pct.toFixed(2)), method,
+    };
+  }),
+);
 
 mkdirSync(new URL('../out/', import.meta.url), { recursive: true });
 const header = 'stock_id,stock_name,market,data_month,director_holding_pct,method';
-const body = results.map((r) =>
+const bodyText = results.map((r) =>
   `${r.stockId},${r.stockName},${r.market},${r.dataMonth},${r.directorHoldingPct},${r.method}`).join('\n');
-writeFileSync(new URL('../out/director-holdings-sample.csv', import.meta.url), `${header}\n${body}\n`);
+writeFileSync(new URL('../out/director-holdings-sample.csv', import.meta.url), `${header}\n${bodyText}\n`);
 console.table(results);
 ```
 
@@ -608,20 +668,26 @@ git commit -m "feat(poc): sample runner outputs director-holdings CSV"
 - 確認兩者距今皆 ≤ 2 個月、且皆為**每月**來源（若 data.gov 上櫃為年更，此處應已改為 MOPS）。
 - 若任一市場無每月來源 → 本 POC 對該市場為 **no-go**，於 FINDINGS 明確記錄。
 
-- [ ] **Step 2: 估算全市場涵蓋率**
+- [ ] **Step 2: 估算涵蓋率（依各市場實際來源）**
 
-以 `fixtures/datagov-listed.csv` + `datagov-otc.csv` 的**不重複公司代號數**，對照 TWSE/TPEx 基本資料的上市＋上櫃總檔數，計算可取得董監明細的比例。記錄到 FINDINGS。目標 ≥ 95%。
+**採 datagov 的市場**：用 csv-parse 算明細的不重複 `公司代號` 數，對照該市場基本資料總檔數得涵蓋率。
 
-Run（一次性，計算明細涵蓋的不重複代號數）:
+Run（上市；上櫃若亦為 datagov，把 `datagov-otc.csv` 也加進陣列）:
 ```bash
 cd poc/director-holdings && npx tsx -e "
 import { readFileSync } from 'node:fs';
-for (const f of ['fixtures/datagov-listed.csv','fixtures/datagov-otc.csv']) {
-  const ids = new Set(readFileSync(f,'utf8').split(/\r?\n/).slice(1).map(l=>l.split(',')[0]).filter(Boolean));
-  console.log(f, '不重複代號數≈', ids.size);
+import { parse } from 'csv-parse/sync';
+for (const f of ['fixtures/datagov-listed.csv']) {
+  const recs = parse(readFileSync(f,'utf8'), { columns:true, skip_empty_lines:true, bom:true, trim:true });
+  const ids = new Set(recs.map(r => String(r['公司代號']).trim()).filter(Boolean));
+  console.log(f, '不重複代號數=', ids.size);
 }
 "
 ```
+
+**採 MOPS 的市場（上櫃年更時）**：MOPS 為逐檔查詢、無法一次列舉，改以**抽樣估計**——隨機抽 20 檔上櫃股，以 Task 6 的 MOPS 路徑查詢，記錄成功取得比率的比例作為涵蓋率估計，於 FINDINGS 標注為「抽樣估計」。
+
+對照各市場基本資料（`out/twse-basic.raw` / `out/tpex-basic.raw`）的總檔數計算比例，記錄到 FINDINGS。目標 ≥ 95%。
 
 - [ ] **Step 3: 寫 `FINDINGS.md`**
 
