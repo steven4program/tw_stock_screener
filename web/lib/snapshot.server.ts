@@ -31,10 +31,17 @@ function mapRow(r: Record<string, unknown>): StockSignal {
 export async function getLatestSnapshot(): Promise<SnapshotPayload> {
   const db = getSupabase();
 
+  // Deterministic "latest displayable run": newest data_date, then the most
+  // recently finished run for that date, then highest id as a final tie-break.
+  // (Same-data_date displayable duplicates are currently prevented upstream by
+  // the no_new_data guard, but ordering here must not depend on that invariant.)
   const { data: disp, error: dErr } = await db
     .from('job_runs').select('data_date, status, finished_at')
     .in('status', ['success', 'partial_success']).not('data_date', 'is', null)
-    .order('data_date', { ascending: false }).limit(1);
+    .order('data_date', { ascending: false })
+    .order('finished_at', { ascending: false, nullsFirst: false })
+    .order('id', { ascending: false })
+    .limit(1);
   if (dErr) throw new Error(`getLatestSnapshot display: ${dErr.message}`);
   if (!disp || disp.length === 0) {
     return { signals: [], scenario: 'no_data', dataDate: null, lastSuccessDate: null, generatedAt: null, directorDataMonthLatest: null };
@@ -42,7 +49,8 @@ export async function getLatestSnapshot(): Promise<SnapshotPayload> {
   const display = disp[0] as { data_date: string; status: 'success' | 'partial_success'; finished_at: string | null };
 
   const { data: lat, error: lErr } = await db
-    .from('job_runs').select('status').order('started_at', { ascending: false }).limit(1);
+    .from('job_runs').select('status')
+    .order('started_at', { ascending: false }).order('id', { ascending: false }).limit(1);
   if (lErr) throw new Error(`getLatestSnapshot latest: ${lErr.message}`);
   const latestStatus = ((lat?.[0]?.status as JobStatus) ?? display.status);
 
