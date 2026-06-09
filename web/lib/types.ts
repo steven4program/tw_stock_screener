@@ -1,5 +1,6 @@
 // web/lib/types.ts
 export type Market = 'TWSE' | 'TPEx';
+export type MarketFilter = 'all' | Market;
 
 export type ExcludeReason =
   | 'insufficient_history_60'

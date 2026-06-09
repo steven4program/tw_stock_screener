@@ -25,6 +25,8 @@ export function StatusBar({ scenario, dataDate, lastSuccessDate, directorDataMon
         <div className="st-main">{main}</div>
         {sub && <span className="st-sub">{sub}</span>}
       </div>
+      {/* 更新時間需與 web/vercel.json 的 cron（0 14 * * * = 台灣 22:00）一致 */}
+      <span className="st-freq">🕙 每日晚上 10:00 自動更新</span>
     </div>
   );
 }

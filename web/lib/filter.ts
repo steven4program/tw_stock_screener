@@ -1,5 +1,5 @@
 // web/lib/filter.ts
-import type { StockSignal, FilterParams, Tag, FilterRow, FilterSummary } from './types';
+import type { StockSignal, FilterParams, MarketFilter, Tag, FilterRow, FilterSummary } from './types';
 
 const BAND_MIN = 0;
 const BAND_MAX = 0.10;
@@ -114,9 +114,11 @@ export function summarize(rows: FilterRow[]): FilterSummary {
 export function runFilter(
   signals: StockSignal[],
   p: FilterParams,
+  market: MarketFilter = 'all',
 ): { rows: FilterRow[]; summary: FilterSummary } {
+  const pool = market === 'all' ? signals : signals.filter((s) => s.market === market);
   const rows: FilterRow[] = [];
-  for (const s of signals) {
+  for (const s of pool) {
     const matchA = matchesA(s, p);
     const matchB = matchesB(s, p);
     if (!matchA && !matchB) continue;

@@ -148,7 +148,7 @@ body {
    頂部狀態列
    ========================================================================= */
 .status {
-  display: flex; align-items: flex-start; gap: var(--sp-3);
+  display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-3);
   padding: var(--sp-4) var(--sp-5);
   border-radius: var(--radius-card);
   border: 2px solid var(--st-ok-bd);
@@ -171,14 +171,21 @@ body {
   border: 1px solid var(--st-warn-bd); border-radius: var(--radius-pill);
   padding: 4px 12px;
 }
+.status .st-freq {
+  font-size: var(--fs-small); color: var(--ink-2); font-weight: 600;
+  margin-left: auto; align-self: flex-end; white-space: nowrap;
+}
+@container appwrap (max-width: 560px) {
+  .status .st-freq { margin-left: 0; width: 100%; text-align: right; }
+}
 
 /* =========================================================================
    參數區
    ========================================================================= */
-.params { padding: var(--sp-5); margin-bottom: var(--sp-4); }
+.params { padding: var(--sp-4); margin-bottom: var(--sp-3); }
 .params-head {
   display:flex; align-items:baseline; justify-content:space-between;
-  gap: var(--sp-3); margin-bottom: var(--sp-4); flex-wrap: wrap;
+  gap: var(--sp-3); margin-bottom: var(--sp-3); flex-wrap: wrap;
 }
 .params-head h2 { margin:0; font-size: var(--fs-title); }
 .data-date { font-size: var(--fs-meta); color: var(--ink-2); font-weight:600; }
@@ -189,7 +196,7 @@ body {
 
 .param {
   background: var(--surface-2); border: 1px solid var(--border);
-  border-radius: var(--radius-ctrl); padding: var(--sp-4);
+  border-radius: var(--radius-ctrl); padding: var(--sp-3);
 }
 .param .p-name { font-size: var(--fs-meta); color: var(--ink-2); font-weight: 700; }
 .param .p-name b { color: var(--ink); }
@@ -211,10 +218,10 @@ body {
   font-size: 30px; color: var(--ink);
 }
 .step-val .unit { font-size: 17px; color: var(--ink-2); font-weight:700; margin-left: 4px; }
-.param .p-range { margin-top: 8px; font-size: var(--fs-small); color: var(--ink-3); text-align:center; }
+.param .p-range { margin-left: 8px; font-size: var(--fs-small); color: var(--ink-3); font-weight: 600; }
 
 .fixed-params {
-  margin-top: var(--sp-4); padding-top: var(--sp-4);
+  margin-top: var(--sp-3); padding-top: var(--sp-3);
   border-top: 1px dashed var(--border);
   display: flex; flex-wrap: wrap; gap: 8px 10px; align-items:center;
 }
@@ -265,6 +272,7 @@ body {
   border-radius: var(--radius-pill); padding: 1px 9px;
 }
 .tab[aria-pressed="true"] .t-count { background: rgba(255,255,255,.25); color: #fff; }
+.market-tabs { margin-bottom: var(--sp-3); }
 
 /* =========================================================================
    排序控制
@@ -455,6 +463,23 @@ body {
 .no-data .nd-ico { font-size: 48px; }
 .no-data .nd-title { font-size: var(--fs-title); font-weight: 800; color: var(--ink); margin-top: var(--sp-3); }
 .no-data .nd-sub { font-size: var(--fs-body); color: var(--ink-2); margin-top: 8px; }
+
+/* =========================================================================
+   錯誤狀態（error boundary）— 重用 no-data 卡片版面，補一顆重試鈕
+   ========================================================================= */
+.retry-btn {
+  margin-top: var(--sp-5);
+  min-height: var(--hit);
+  padding: 0 var(--sp-6);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-ctrl);
+  cursor: pointer;
+}
+.retry-btn:hover { filter: brightness(1.08); }
 
 /* =========================================================================
    鍵盤焦點指示（WCAG 2.1 AA — 2.4.7 Focus Visible）

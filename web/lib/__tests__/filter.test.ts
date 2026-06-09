@@ -140,3 +140,28 @@ describe('manualSort', () => {
     expect(manualSort(rows(), 'director', 'asc').map((r) => r.signal.stockId)).toEqual(['X', 'Y']);
   });
 });
+
+describe('runFilter 市場別前置篩選', () => {
+  const twseA = sig({ stockId: 'T1', market: 'TWSE', distMa20Ratio: 0.5 }); // A-only（B 帶寬不過）
+  const twseAB = sig({ stockId: 'T2', market: 'TWSE' });                    // A+B
+  const tpexB = sig({ stockId: 'P1', market: 'TPEx', distMa60Ratio: 0.5 }); // B-only
+
+  it("market='all'（預設）不過濾，等同舊行為", () => {
+    const { rows, summary } = runFilter([twseA, twseAB, tpexB], { n: 2, x: 15 });
+    expect(rows).toHaveLength(3);
+    expect(summary).toEqual({ total: 3, countA: 2, countB: 2, countAB: 1 });
+  });
+
+  it("market='TWSE' 只保留上市，計數同步只算上市", () => {
+    const { rows, summary } = runFilter([twseA, twseAB, tpexB], { n: 2, x: 15 }, 'TWSE');
+    expect(rows.map((r) => r.signal.stockId)).toEqual(['T2', 'T1']); // A+B 排序優先
+    expect(rows.every((r) => r.signal.market === 'TWSE')).toBe(true);
+    expect(summary).toEqual({ total: 2, countA: 2, countB: 1, countAB: 1 });
+  });
+
+  it("market='TPEx' 只保留上櫃", () => {
+    const { rows, summary } = runFilter([twseA, twseAB, tpexB], { n: 2, x: 15 }, 'TPEx');
+    expect(rows.map((r) => r.signal.stockId)).toEqual(['P1']);
+    expect(summary).toEqual({ total: 1, countA: 0, countB: 1, countAB: 0 });
+  });
+});

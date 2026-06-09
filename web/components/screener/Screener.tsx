@@ -1,11 +1,12 @@
 // web/components/screener/Screener.tsx
 'use client';
 import { useMemo, useState } from 'react';
-import type { StockSignal, FilterRow } from '@/lib/types';
+import type { StockSignal, FilterRow, MarketFilter } from '@/lib/types';
 import { runFilter, manualSort } from '@/lib/filter';
 import type { Tab, SortKey } from './types';
 import { SORT_DIR } from './types';
 import { ParamPanel } from './ParamPanel';
+import { MarketTabs } from './MarketTabs';
 import { StatsRow } from './StatsRow';
 import { Tabs } from './Tabs';
 import { SortBar } from './SortBar';
@@ -17,11 +18,12 @@ export function Screener({ signals, dataDate, directorDataMonthLatest }: {
 }) {
   const [n, setN] = useState(2);
   const [x, setX] = useState(15);
+  const [market, setMarket] = useState<MarketFilter>('all');
   const [tab, setTab] = useState<Tab>('all');
   const [sort, setSort] = useState<SortKey>('composite');
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
-  const { rows, summary } = useMemo(() => runFilter(signals, { n, x }), [signals, n, x]);
+  const { rows, summary } = useMemo(() => runFilter(signals, { n, x }, market), [signals, n, x, market]);
 
   const listRows = useMemo(() => {
     let r: FilterRow[] = rows;
@@ -36,6 +38,7 @@ export function Screener({ signals, dataDate, directorDataMonthLatest }: {
   return (
     <>
       <ParamPanel n={n} x={x} onN={setN} onX={setX} dataDate={dataDate} />
+      <MarketTabs market={market} onMarket={setMarket} />
       <StatsRow summary={summary} />
       <Tabs tab={tab} onTab={setTab} summary={summary} />
       <SortBar sort={sort} onSort={setSort} count={listRows.length} />

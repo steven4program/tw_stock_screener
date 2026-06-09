@@ -76,6 +76,27 @@ test.describe('client island interactions', () => {
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-skin', 'paper');
   });
+
+  test('市場別篩選 上市/上櫃 narrows list and counts', async ({ page }) => {
+    const marketGroup = page.getByRole('group', { name: '市場別' });
+    const tw = page.locator('article.srow', { hasText: '台積電股' }); // 2330 TWSE
+    const tp = page.locator('article.srow', { hasText: '環球晶股' }); // 6488 TPEx
+
+    await expect(page.locator('article.srow')).toHaveCount(5); // 全部
+
+    await marketGroup.getByRole('button', { name: '上櫃' }).click();
+    await expect(tp).toBeVisible();
+    await expect(tw).toHaveCount(0);
+    await expect(page.locator('article.srow')).toHaveCount(2); // 6488 + 9999
+
+    await marketGroup.getByRole('button', { name: '上市' }).click();
+    await expect(tw).toBeVisible();
+    await expect(tp).toHaveCount(0);
+    await expect(page.locator('article.srow')).toHaveCount(3); // 2330 + 1101 + 3008
+
+    await marketGroup.getByRole('button', { name: '全部' }).click();
+    await expect(page.locator('article.srow')).toHaveCount(5);
+  });
 });
 
 test('server renders data-skin from the cookie on first load (no FOUC)', async ({ page, context }) => {
