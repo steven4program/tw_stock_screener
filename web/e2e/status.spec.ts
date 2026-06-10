@@ -2,9 +2,9 @@ import { test, expect, open } from './fixtures';
 
 const bar = '.status[role="status"]';
 
-test('partial: ok tone + director-reuse sub-banner', async ({ page, context }) => {
+test('partial: warn tone + director-reuse sub-banner', async ({ page, context }) => {
   await open(page, context, { scenario: 'partial' });
-  await expect(page.locator(bar)).toHaveAttribute('data-tone', 'ok');
+  await expect(page.locator(bar)).toHaveAttribute('data-tone', 'warn');
   await expect(page.locator(bar)).toContainText('董監資料沿用 2026-04');
 });
 

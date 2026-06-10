@@ -25,7 +25,7 @@ export default async function Page() {
         <div className="no-data card">
           <div className="nd-ico" aria-hidden="true">📊</div>
           <div className="nd-title serif">資料準備中</div>
-          <div className="nd-sub">尚無可顯示的選股快照，請稍後再來。</div>
+          <div className="nd-sub">每日晚上 10:00 收盤後自動更新，更新後即可看到當日選股，請晚一點再回來看看。</div>
         </div>
       ) : (
         <>

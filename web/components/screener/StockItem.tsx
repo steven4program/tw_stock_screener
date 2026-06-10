@@ -23,7 +23,7 @@ export function StockItem({ row, tab, expanded, onToggle, directorDataMonthLates
   else { if (row.matchA) groups.push('A'); if (row.matchB) groups.push('B'); }
 
   return (
-    <article className="srow card">
+    <article className="srow card" role="listitem">
       <div className="srow-main">
         <div className="s-name-wrap">
           <div className="s-id-name">
@@ -54,7 +54,9 @@ export function StockItem({ row, tab, expanded, onToggle, directorDataMonthLates
         <DirectorCell sig={s} directorDataMonthLatest={directorDataMonthLatest} />
 
         <div className="cell action m-cell">
-          <button className="reason-btn" aria-expanded={expanded} aria-controls={`reasons-${s.stockId}`} onClick={onToggle}>
+          <button className="reason-btn"
+            aria-label={`${expanded ? '收合' : '看原因'} — ${s.stockName} ${s.stockId}`}
+            aria-expanded={expanded} aria-controls={`reasons-${s.stockId}`} onClick={onToggle}>
             {expanded ? '收合' : '看原因'} <span className="chev" aria-hidden="true">▾</span>
           </button>
         </div>

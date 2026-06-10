@@ -7,7 +7,6 @@ import type { Tab, SortKey } from './types';
 import { SORT_DIR } from './types';
 import { ParamPanel } from './ParamPanel';
 import { MarketTabs } from './MarketTabs';
-import { StatsRow } from './StatsRow';
 import { Tabs } from './Tabs';
 import { SortBar } from './SortBar';
 import { StockList } from './StockList';
@@ -39,9 +38,9 @@ export function Screener({ signals, dataDate, directorDataMonthLatest }: {
     <>
       <ParamPanel n={n} x={x} onN={setN} onX={setX} dataDate={dataDate} />
       <MarketTabs market={market} onMarket={setMarket} />
-      <StatsRow summary={summary} />
       <Tabs tab={tab} onTab={setTab} summary={summary} />
       <SortBar sort={sort} onSort={setSort} count={listRows.length} />
+      <h2 className="sr-only">選股結果（共 {listRows.length} 檔）</h2>
       <div className="list-head">
         <span>代號 / 名稱</span>
         <span>收盤價 / 漲跌</span>
