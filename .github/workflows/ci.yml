@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same ref (e.g. rapid pushes to a PR).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        # `npm install` (not `npm ci`): the lockfile is generated on macOS and
+        # cannot fully capture Linux-only native-binary subtrees (e.g. the
+        # @emnapi/* versions pinned by the Linux toolchain binaries), so `npm ci`
+        # refuses on the Linux runner. `npm install` reconciles those per-platform.
+        run: npm install --no-audit --no-fund
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test
+
+      # `npm run e2e` does `next build` then `playwright test`. The webServer
+      # starts `next start` with E2E=1, so the app serves deterministic fixtures
+      # (no Supabase env needed). CI=true is set by Actions automatically.
+      - name: E2E tests
+        run: npm run e2e
