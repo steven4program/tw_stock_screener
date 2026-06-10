@@ -28,7 +28,11 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        # `npm install` (not `npm ci`): the lockfile is generated on macOS and
+        # cannot fully capture Linux-only native-binary subtrees (e.g. the
+        # @emnapi/* versions pinned by the Linux toolchain binaries), so `npm ci`
+        # refuses on the Linux runner. `npm install` reconciles those per-platform.
+        run: npm install --no-audit --no-fund
 
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
