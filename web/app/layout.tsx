@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { cookies } from 'next/headers';
 import { notoSans, notoSerif } from '@/lib/fonts';
 import { normalizeSkin, SKIN_COOKIE } from '@/lib/skin';
+import { Analytics } from '@vercel/analytics/next';
 
 export const metadata = {
   title: '台股選股器',
@@ -14,7 +15,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const skin = normalizeSkin((await cookies()).get(SKIN_COOKIE)?.value);
   return (
     <html lang="zh-Hant" data-skin={skin} className={`${notoSans.variable} ${notoSerif.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
