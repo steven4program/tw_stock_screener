@@ -1,0 +1,4 @@
+# Agent / tooling scratch (not part of the project)
+.agents/
+.playwright-mcp/
+skills-lock.json
