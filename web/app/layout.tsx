@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import { notoSans, notoSerif } from '@/lib/fonts';
 import { normalizeSkin, SKIN_COOKIE } from '@/lib/skin';
 import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 
 export const metadata = {
   title: '台股選股器',
@@ -18,6 +19,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <body>
         {children}
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
