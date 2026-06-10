@@ -8,7 +8,7 @@ export function StockList({ rows, tab, open, onToggle, directorDataMonthLatest }
   onToggle: (id: string) => void; directorDataMonthLatest: string | null;
 }) {
   return (
-    <div className="list">
+    <div className="list" role="list">
       {rows.map((row) => (
         <StockItem key={row.signal.stockId} row={row} tab={tab}
           expanded={!!open[row.signal.stockId]} onToggle={() => onToggle(row.signal.stockId)}

@@ -12,7 +12,7 @@ export function DirectorCell({ sig, directorDataMonthLatest }: {
       <div className="c-num num">{sig.directorHoldingPct !== null ? sig.directorHoldingPct.toFixed(1) : '—'}%</div>
       <div className="c-sub num">
         {stale
-          ? <span className="director-stale">⚠ {sig.directorDataMonth}・資料較舊</span>
+          ? <span className="director-stale">⚠ 沿用 {sig.directorDataMonth}・資料較舊</span>
           : <span>{sig.directorDataMonth}</span>}
       </div>
     </div>

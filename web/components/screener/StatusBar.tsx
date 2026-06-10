@@ -9,12 +9,12 @@ export function StatusBar({ scenario, dataDate, lastSuccessDate, directorDataMon
 }) {
   let tone = 'ok', ico = '✅', main = '', sub: string | null = null;
   if (scenario === 'stale') {
-    tone = 'warn'; ico = '⚠️'; main = `資料尚未更新（最後更新 ${lastSuccessDate}）`;
+    tone = 'warn'; ico = '⚠️'; main = `資料尚未更新（以下為 ${lastSuccessDate} 最後更新內容）`;
   } else if (scenario === 'failed') {
     tone = 'bad'; ico = '⛔'; main = `更新失敗（顯示為上次成功資料 ${lastSuccessDate}）`;
   } else if (scenario === 'partial') {
-    main = `今日已更新 ・ 資料日期 ${dataDate}`;
-    sub = directorDataMonthLatest ? `⚠️ 董監資料沿用 ${directorDataMonthLatest} 月份` : '⚠️ 董監資料暫缺';
+    tone = 'warn'; ico = '⚠️'; main = `今日已更新 ・ 部分資料較舊`;
+    sub = directorDataMonthLatest ? `董監資料沿用 ${directorDataMonthLatest} 月份` : '董監資料暫缺';
   } else {
     main = `今日已更新 ・ 資料日期 ${dataDate}`;
   }

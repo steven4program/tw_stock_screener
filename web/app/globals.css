@@ -11,13 +11,14 @@
   --serif-weight: 700;
 
   /* ---- 字級階（大字體基準）---- */
-  --fs-display: 30px;   /* 股名 */
-  --fs-num-xl: 26px;    /* 重點數字：價格、連買天數 */
-  --fs-num-lg: 22px;    /* 次級數字 */
-  --fs-title: 21px;     /* 區塊標題 */
-  --fs-body: 18px;      /* 內文（最小）*/
-  --fs-meta: 16px;      /* 標籤、欄名 */
-  --fs-small: 15px;     /* 註記（仍維持 AA）*/
+  /* rem 而非 px：根元素不寫死 font-size，讓使用者的瀏覽器／系統放大字級生效 */
+  --fs-display: 1.875rem;  /* 30px @16 股名 */
+  --fs-num-xl: 1.625rem;   /* 26px 重點數字：價格、連買天數 */
+  --fs-num-lg: 1.375rem;   /* 22px 次級數字 */
+  --fs-title: 1.3125rem;   /* 21px 區塊標題 */
+  --fs-body: 1.125rem;     /* 18px 內文（最小）*/
+  --fs-meta: 1rem;         /* 16px 標籤、欄名 */
+  --fs-small: 0.9375rem;   /* 15px 註記（仍維持 AA）*/
 
   /* ---- 間距 ---- */
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
@@ -111,10 +112,10 @@
   --radius-ctrl: 12px;
   --shadow-card: 0 2px 4px rgba(11,18,32,.08), 0 10px 28px rgba(11,18,32,.10);
   --card-border: 2px solid var(--border);
-  --fs-display: 32px;
-  --fs-num-xl: 28px;
-  --fs-num-lg: 23px;
-  --fs-body: 19px;
+  --fs-display: 2rem;       /* 32px */
+  --fs-num-xl: 1.75rem;     /* 28px */
+  --fs-num-lg: 1.4375rem;   /* 23px */
+  --fs-body: 1.1875rem;     /* 19px */
 }
 
 /* =========================================================================
@@ -158,16 +159,16 @@ body {
 .status[data-tone="ok"]   { background: var(--st-ok-bg);   border-color: var(--st-ok-bd); }
 .status[data-tone="warn"] { background: var(--st-warn-bg); border-color: var(--st-warn-bd); }
 .status[data-tone="bad"]  { background: var(--st-bad-bg);  border-color: var(--st-bad-bd); }
-.status .ico { font-size: 28px; line-height: 1.2; flex: none; }
-.status .st-text { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
-.status .st-main { font-size: 21px; font-weight: 800; color: var(--ink); letter-spacing: .01em; }
+.status .ico { font-size: 1.75rem; line-height: 1.2; flex: none; }
+.status .st-text { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-3); min-width: 0; }
+.status .st-main { font-size: var(--fs-title); font-weight: 800; color: var(--ink); letter-spacing: .01em; }
 .status[data-tone="ok"] .st-main   { color: #0f5c2e; }
 .status[data-tone="warn"] .st-main { color: #8a4b00; }
 .status[data-tone="bad"] .st-main  { color: #8f1d17; }
 .status .st-sub {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: var(--fs-meta); font-weight: 700;
-  color: #8a4b00; background: var(--st-warn-bg);
+  color: #8a4b00; background: var(--surface);
   border: 1px solid var(--st-warn-bd); border-radius: var(--radius-pill);
   padding: 4px 12px;
 }
@@ -206,7 +207,7 @@ body {
   border-radius: var(--radius-ctrl);
   border: 2px solid var(--accent);
   background: var(--surface); color: var(--accent);
-  font-size: 30px; font-weight: 700; line-height: 1; cursor: pointer;
+  font-size: 1.875rem; font-weight: 700; line-height: 1; cursor: pointer;
   display: grid; place-items: center;
   transition: background .12s, transform .06s;
 }
@@ -215,9 +216,9 @@ body {
 .step-btn:disabled { opacity: .35; cursor: not-allowed; border-color: var(--border-strong); color: var(--ink-3); }
 .step-val {
   flex: 1; text-align: center; font-weight: 800;
-  font-size: 30px; color: var(--ink);
+  font-size: 1.875rem; color: var(--ink);
 }
-.step-val .unit { font-size: 17px; color: var(--ink-2); font-weight:700; margin-left: 4px; }
+.step-val .unit { font-size: 1.0625rem; color: var(--ink-2); font-weight:700; margin-left: 4px; }
 .param .p-range { margin-left: 8px; font-size: var(--fs-small); color: var(--ink-3); font-weight: 600; }
 
 .fixed-params {
@@ -233,22 +234,8 @@ body {
 }
 
 /* =========================================================================
-   統計列 + 分頁
+   分類分頁
    ========================================================================= */
-.stats {
-  display: flex; flex-wrap: wrap; gap: var(--sp-3);
-  margin-bottom: var(--sp-4);
-}
-.stat {
-  flex: 1 1 0; min-width: 120px;
-  background: var(--surface); border: var(--card-border);
-  border-radius: var(--radius-ctrl); box-shadow: var(--shadow-card);
-  padding: var(--sp-3) var(--sp-4);
-}
-.stat .s-num { font-size: var(--fs-num-xl); font-weight: 800; color: var(--ink); }
-.stat .s-lab { font-size: var(--fs-meta); color: var(--ink-2); font-weight: 600; margin-top: 2px; }
-.stat.is-ab .s-num { color: var(--accent); }
-
 .tabs {
   display: flex; gap: var(--sp-2); margin-bottom: var(--sp-4);
   flex-wrap: wrap;
@@ -342,7 +329,8 @@ body {
 .chg.down { color: var(--down); }
 .chg.flat { color: var(--flat); }
 
-.streak .c-num { color: var(--up); }
+/* 連買天數用中性深色（粗體）強調，把紅色語意純保留給漲跌價格 */
+.streak .c-num { color: var(--ink); }
 .streak .big { font-size: var(--fs-num-xl); }
 
 .director-stale {
@@ -361,7 +349,7 @@ body {
   padding: 0 var(--sp-3); transition: background .12s;
 }
 .reason-btn:hover { background: var(--accent-soft); }
-.reason-btn .chev { transition: transform .18s; font-size: 14px; }
+.reason-btn .chev { transition: transform .18s; font-size: 0.875rem; }
 .reason-btn[aria-expanded="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
 .reason-btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
 
@@ -393,7 +381,7 @@ body {
   flex: none; width: 26px; height: 26px; border-radius: 50%;
   background: var(--st-ok-bg); color: var(--st-ok);
   border: 1px solid var(--st-ok-bd);
-  display: grid; place-items: center; font-size: 15px; font-weight: 900;
+  display: grid; place-items: center; font-size: var(--fs-small); font-weight: 900;
   margin-top: 2px;
 }
 
@@ -409,7 +397,7 @@ body {
   .srow { padding: var(--sp-4); }
   .srow-main { grid-template-columns: 1fr 1fr; gap: var(--sp-4) var(--sp-3); }
   .s-name-wrap { grid-column: 1 / -1; }
-  .s-name { font-size: 30px; }
+  .s-name { font-size: var(--fs-display); }
   .col-label { display: inline; font-size: var(--fs-small); color: var(--ink-3); font-weight: 700; }
   .cell.m-cell { display: flex; flex-direction: column; gap: 2px;
     padding-top: var(--sp-3); border-top: 1px solid var(--border); }
@@ -424,7 +412,7 @@ body {
 .empty {
   text-align: center; padding: var(--sp-8) var(--sp-5);
 }
-.empty .e-ico { font-size: 48px; }
+.empty .e-ico { font-size: 3rem; }
 .empty .e-title { font-size: var(--fs-title); font-weight: 800; color: var(--ink); margin-top: var(--sp-3); }
 .empty .e-sub { font-size: var(--fs-body); color: var(--ink-2); margin-top: 8px; }
 
@@ -437,7 +425,7 @@ body {
 .footer .f-title { font-weight: 800; color: var(--ink-2); display:flex; align-items:center; gap:8px; margin-bottom: 6px; }
 
 .app-title { display:flex; align-items:baseline; gap:12px; margin: 4px 0 var(--sp-4); flex-wrap: wrap; }
-.app-title h1 { margin:0; font-size: 28px; color: var(--ink); }
+.app-title h1 { margin:0; font-size: 1.75rem; color: var(--ink); }
 .app-title .sub { font-size: var(--fs-meta); color: var(--ink-2); font-weight:600; }
 
 /* 展開原因：不用 opacity 進場動畫，確保截圖與無障礙皆可見 */
@@ -460,8 +448,8 @@ body {
    空庫狀態（no_data）
    ========================================================================= */
 .no-data { text-align: center; padding: var(--sp-8) var(--sp-5); }
-.no-data .nd-ico { font-size: 48px; }
-.no-data .nd-title { font-size: var(--fs-title); font-weight: 800; color: var(--ink); margin-top: var(--sp-3); }
+.no-data .nd-ico { font-size: 3rem; }
+.no-data .nd-title { font-size: var(--fs-display); font-weight: 800; color: var(--ink); margin-top: var(--sp-3); }
 .no-data .nd-sub { font-size: var(--fs-body); color: var(--ink-2); margin-top: 8px; }
 
 /* =========================================================================
@@ -486,3 +474,10 @@ body {
    設計稿未含 focus 樣式；自訂控件會蓋掉瀏覽器預設外框，故補上清楚的焦點環。
    ========================================================================= */
 :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+/* 視覺隱藏但保留給螢幕報讀者（結果區標題等） */
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
